@@ -15,6 +15,11 @@ export default {
       return await analyzeArticle(request, env, ai);
     }
 
+    // 翻訳用
+    if (url.pathname === '/translate' && request.method === 'POST') {
+      return await translateTitle(request, env, ai);
+    }
+
     return new Response('Usage: POST /analyze with JSON { "title": "..." }', { status: 404 });
   }
 };
@@ -136,4 +141,65 @@ async function setupTags(env, ai) {
   await env.TAG_INDEX.upsert(vectors);
 
   return new Response(`Setup complete! Registered ${vectors.length} tags.`);
+}
+
+// ==================================================
+// 3. 翻訳ロジック
+// ==================================================
+async function translateTitle(request, env, ai) {
+  try {
+    const { title } = await request.json();
+    if (!title) return new Response('No title provided', { status: 400 });
+
+    // 既に日本語が含まれる場合は翻訳スキップ
+    if (containsJapanese(title)) {
+      return new Response(JSON.stringify({
+        translated: false,
+        title_ja: title
+      }), {
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    // Llama 3.2-3B-Instruct で翻訳
+    const translatedTitle = await runTranslation(ai, title);
+
+    return new Response(JSON.stringify({
+      translated: true,
+      title_ja: translatedTitle || title
+    }), {
+      headers: { 'content-type': 'application/json' }
+    });
+
+  } catch (e) {
+    return new Response(JSON.stringify({
+      error: e.message,
+      title_ja: title // フォールバック
+    }), { status: 500 });
+  }
+}
+
+function containsJapanese(text) {
+  // ひらがな、カタカナ、漢字を検出
+  return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(text);
+}
+
+async function runTranslation(ai, title) {
+  const prompt = `
+Translate the following news title to natural Japanese.
+Keep it concise and maintain the journalistic tone.
+Output ONLY the Japanese translation, no explanation.
+
+Title: "${title}"
+Japanese:`;
+
+  try {
+    const response = await ai.run('@cf/meta/llama-3.2-3b-instruct', {
+      messages: [{ role: 'user', content: prompt }]
+    });
+    return (response.response || '').trim();
+  } catch (e) {
+    console.error('Translation failed:', e);
+    return null;
+  }
 }
