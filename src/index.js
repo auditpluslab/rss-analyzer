@@ -1,15 +1,139 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { Ai } from '@cloudflare/ai';
 
 export default {
-	async fetch(request, env, ctx) {
-		return new Response('Hello World!');
-	},
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const ai = new Ai(env.AI);
+
+    // 初回設定用
+    if (url.pathname === '/setup-tags') {
+      return await setupTags(env, ai);
+    }
+
+    // 分析用
+    if (url.pathname === '/analyze' && request.method === 'POST') {
+      return await analyzeArticle(request, env, ai);
+    }
+
+    return new Response('Usage: POST /analyze with JSON { "title": "..." }', { status: 404 });
+  }
 };
+
+// ==================================================
+// 1. 分析ロジック (変更なし)
+// ==================================================
+async function analyzeArticle(request, env, ai) {
+  try {
+    const { title } = await request.json();
+    if (!title) return new Response('No title provided', { status: 400 });
+
+    // --- A. タグ付け (Embedding) ---
+    const embeddings = await ai.run('@cf/baai/bge-m3', { text: title });
+    const vector = embeddings.data[0];
+
+    const tagMatches = await env.TAG_INDEX.query(vector, { topK: 3, returnMetadata: true });
+    const fixedTags = tagMatches.matches
+      .filter(m => m.score > 0.45)
+      .map(m => m.metadata.tag);
+
+    // --- B. 分析 (LLM) ---
+    let analysisResult = await runLLMAnalysis(ai, '@cf/meta/llama-3.2-1b-instruct', title);
+
+    if (!analysisResult) {
+      console.log("1B failed, switching to 8B...");
+      analysisResult = await runLLMAnalysis(ai, '@cf/meta/llama-3-8b-instruct', title);
+    }
+
+    const safeResult = analysisResult || { sentiment: "NEUTRAL", score: 50, keyword: "None" };
+
+    const finalResponse = {
+      sentiment: safeResult.sentiment,
+      score: safeResult.score,
+      fixed_tags: fixedTags,
+      all_tags: Array.from(new Set([...fixedTags, safeResult.keyword])).filter(t => t !== "None")
+    };
+
+    return new Response(JSON.stringify(finalResponse), {
+      headers: { 'content-type': 'application/json' }
+    });
+
+  } catch (e) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+  }
+}
+
+async function runLLMAnalysis(ai, model, title) {
+  const prompt = `
+  Analyze the news title for a business executive.
+  News Title: "${title}"
+  Task:
+  1. Sentiment: POSITIVE, NEGATIVE, or NEUTRAL.
+  2. Score: 0-100 (Importance).
+  3. Keyword: Extract ONE most specific and important keyword from the title.
+  Output JSON ONLY: {"sentiment": "...", "score": 0, "keyword": "..."}
+  `;
+
+  try {
+    const response = await ai.run(model, { messages: [{ role: 'user', content: prompt }] });
+    const text = response.response || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    return null;
+  }
+}
+
+// ==================================================
+// 2. タグ登録ロジック (★ここを修正: バッチ処理化)
+// ==================================================
+async function setupTags(env, ai) {
+  const tagList = [
+    // ▼ テクノロジー
+    "半導体", "生成AI", "SaaS", "クラウド", "サイバーセキュリティ", 
+    "データセンター", "ブロックチェーン", "暗号資産", "宇宙ビジネス", 
+    "量子コンピュータ", "ロボティクス", "スタートアップ",
+    // ▼ 製造・モビリティ
+    "自動車", "EV", "電池", "自動運転", "機械", "素材", "化学", 
+    "鉄鋼", "航空宇宙", "防衛産業", "物流", "ドローン",
+    // ▼ 金融・経済
+    "マクロ経済", "金利", "為替", "インフレ", "中央銀行", "決算", 
+    "M&A", "IPO", "FinTech", "銀行", "保険", "証券", "投資ファンド",
+    // ▼ 生活・ヘルスケア
+    "ヘルスケア", "医薬品", "バイオ", "医療機器", "小売", "EC", 
+    "食品", "不動産", "建設", "インバウンド", "観光", "エンタメ", "ゲーム",
+    // ▼ エネルギー・環境
+    "エネルギー", "原油", "脱炭素", "再生可能エネルギー", "ESG", 
+    "電力", "資源", "農業",
+    // ▼ 政治
+    "政治", "選挙", "規制", "米中対立", "地政学リスク", 
+    "中国経済", "米国経済", "欧州経済", "新興国"
+  ];
+
+  const vectors = [];
+  
+  // ★修正ポイント：10個ずつまとめてAIに送る（回数制限対策）
+  const batchSize = 10;
+  
+  for (let i = 0; i < tagList.length; i += batchSize) {
+    // 10個取り出す
+    const batch = tagList.slice(i, i + batchSize);
+    
+    // まとめてベクトル化（これでAPI呼び出しは1回で済む）
+    const embeddingsResponse = await ai.run('@cf/baai/bge-m3', { text: batch });
+    
+    // 結果を整形
+    for (let j = 0; j < batch.length; j++) {
+      vectors.push({
+        id: batch[j],
+        values: embeddingsResponse.data[j], // 対応するベクトルを取り出す
+        metadata: { tag: batch[j] }
+      });
+    }
+  }
+
+  // Vectorizeに保存
+  await env.TAG_INDEX.upsert(vectors);
+
+  return new Response(`Setup complete! Registered ${vectors.length} tags.`);
+}
