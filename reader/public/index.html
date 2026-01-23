@@ -190,7 +190,8 @@
             color: #111;
             font-size: 14px;
             line-height: 1.4;
-            min-height: 2.8em;
+            max-height: 2.8em;
+            overflow: hidden;
             transition: color 0.3s;
         }
 
@@ -213,15 +214,12 @@
             margin-right: 6px;
         }
 
-        /* タイトルテキスト（1行固定、省略記号対応） */
+        /* タイトルテキスト（折り返し許可、親要素で2行に制限） */
         .title-text {
             flex: 1;
             min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            word-break: normal;
             line-height: 1.4;
+            word-break: break-all;
         }
 
         /* タブレット端末専用の調整 (600px以上 1024px以下) */
