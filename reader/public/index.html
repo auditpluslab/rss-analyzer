@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>News Feed</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 60px;
+            color: #111;
+            overflow-anchor: auto;
+            -webkit-text-size-adjust: 100%;
+            overscroll-behavior-y: contain;
+        }
+
+        /* ヘッダー */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            background: rgba(255, 255, 255, 0.98);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .unread-badge {
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            background: #ff4757;
+            padding: 2px 8px;
+            border-radius: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .unread-badge.visible {
+            opacity: 1;
+        }
+
+        /* アクションボタン群 */
+        .header-actions {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .btn-action {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #333;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .btn-action:active {
+            transform: scale(0.9);
+        }
+
+        /* 更新ボタンのアニメーション */
+        .btn-refresh {
+            transition: transform 0.3s ease;
+        }
+
+        .spinning {
+            animation: spin 1s linear infinite;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Pull to Refresh */
+        #pullIndicator {
+            height: 0;
+            overflow: hidden;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #888;
+            transition: height 0.2s;
+            background: #f5f5f5;
+        }
+
+        #pullIndicator.loading {
+            height: 50px;
+        }
+
+        /* リストアイテム */
+        .list-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: flex-start;
+            background: #fff;
+            transition: background-color 0.5s ease;
+        }
+
+        /* 左カラム（星と時間：スマホ用） */
+        .left-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            margin-right: 12px;
+            width: 24px;
+            flex-shrink: 0;
+            padding-top: 3px;
+        }
+
+        .star-btn {
+            border: none;
+            background: none;
+            font-size: 18px;
+            color: #ddd;
+            cursor: pointer;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            text-align: center;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .star-btn.saved {
+            color: #f1c40f;
+        }
+
+        /* 時間表示 */
+        .time-tag {
+            font-family: -apple-system, sans-serif;
+            font-size: 9px;
+            color: #ccc;
+            white-space: nowrap;
+        }
+
+        .time-tag.mobile {
+            text-align: center;
+            display: block;
+        }
+
+        .time-tag.pc {
+            display: none;
+        }
+
+        /* コンテンツエリア */
+        .item-content {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* メインリンク */
+        .content-link {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-decoration: none;
+            color: #111;
+            font-size: 14px;
+            line-height: 1.4;
+            -webkit-line-clamp: 2;
+            min-height: 2.8em;
+            transition: color 0.3s;
+        }
+
+        .inline-source {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            color: #555;
+            background: #eee;
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-right: 6px;
+            vertical-align: 1px;
+        }
+
+        .ai-match {
+            color: #ff4757;
+            font-weight: bold;
+            font-size: 10px;
+            margin-right: 6px;
+        }
+
+        /* タブレット端末専用の調整 (600px以上 1024px以下) */
+        @media (min-width: 600px) and (max-width: 1024px) {
+            /* 記事タイトルの文字サイズを大きく */
+            .content-link {
+                font-size: 17px !important; /* スマホ/PCの14pxより大きく */
+                line-height: 1.6;
+                min-height: 3.2em; /* 行間拡大に合わせて調整 */
+            }
+
+            /* 記事リストのパディングも少しゆったりさせる */
+            .list-item {
+                padding: 12px 16px;
+            }
+
+            /* ソース名のタグも少し大きく */
+            .inline-source {
+                font-size: 12px;
+                padding: 2px 8px;
+            }
+        }
+
+        /* PC用レイアウト */
+        @media (min-width: 768px) {
+            .list-item {
+                align-items: center;
+                padding: 6px 20px;
+            }
+
+            .left-col {
+                padding-top: 0;
+                margin-right: 15px;
+                width: auto;
+                flex-direction: row;
+            }
+
+            .time-tag.mobile {
+                display: none;
+            }
+
+            .time-tag.pc {
+                display: block;
+                margin-left: auto;
+                padding-left: 15px;
+                flex-shrink: 0;
+                font-size: 11px;
+            }
+
+            .item-content {
+                display: flex;
+                align-items: center;
+                width: 100%;
+            }
+
+            .content-link {
+                display: flex;
+                align-items: center;
+                -webkit-line-clamp: 1;
+                min-height: auto;
+                margin-bottom: 0;
+                flex: 1;
+            }
+        }
+
+        /* 既読スタイル */
+        .list-item.read .content-link {
+            color: #aaa;
+        }
+
+        .list-item.read .source-tag {
+            opacity: 0.6;
+        }
+
+        .list-item.read .inline-source {
+            background: #f9f9f9;
+            color: #ccc;
+        }
+
+        .list-item.read {
+            background-color: #fafafa;
+        }
+
+        /* タブバー */
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.95);
+            border-top: 1px solid #eee;
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .tab-btn {
+            border: none;
+            background: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #ccc;
+            padding: 10px 20px;
+        }
+
+        .tab-btn.active {
+            color: #000;
+            transform: scale(1.1);
+            transition: transform 0.2s;
+        }
+
+        .tab-btn.active.ai-tab {
+            color: #ff4757;
+        }
+
+        /* Loading */
+        .loading-spinner {
+            text-align: center;
+            padding: 20px;
+            display: none;
+            color: #999;
+            font-size: 12px;
+        }
+
+        #sentinel {
+            height: 20px;
+        }
+
+        /* スクロール検知用の見えない壁 */
+
+        #homeView,
+        #aiView,
+        #savedView {
+            display: none;
+        }
+
+        /* 検索UI */
+        .btn-search {
+            font-size: 18px;
+        }
+
+        .search-container {
+            display: none;
+            padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #eee;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-container.visible {
+            display: flex;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+            background: #fff;
+        }
+
+        .search-input:focus {
+            border-color: #999;
+        }
+
+        .search-clear {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #666;
+            padding: 0 5px;
+        }
+
+        .search-status {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .search-status .icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        /* TTS Control Bar */
+        .tts-control-bar {
+            position: fixed;
+            bottom: 50px;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            color: #fff;
+            padding: 10px 15px;
+            display: none;
+            z-index: 200;
+            border-top: 1px solid #333;
+            backdrop-filter: blur(10px);
+        }
+
+        .tts-control-bar.visible {
+            display: block;
+        }
+
+        .tts-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .tts-title {
+            font-size: 13px;
+            font-weight: 600;
+            max-width: 70%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tts-progress {
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        .tts-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .tts-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .tts-btn:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .tts-btn-primary {
+            background: #ff4757;
+            font-size: 24px;
+        }
+
+        .tts-btn-primary:active {
+            background: #e63e4d;
+        }
+
+        /* TTS Settings Panel */
+        .tts-settings {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #fff;
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            z-index: 300;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .tts-settings.visible {
+            transform: translateY(0);
+        }
+
+        .tts-settings-content h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #111;
+        }
+
+        .tts-setting-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+
+        .tts-setting-row label {
+            min-width: 100px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .tts-select {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #fff;
+        }
+
+        .tts-slider {
+            flex: 1;
+            height: 4px;
+            border-radius: 2px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .tts-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff4757;
+            cursor: pointer;
+        }
+
+        .tts-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff4757;
+            cursor: pointer;
+            border: none;
+        }
+
+        .tts-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+            min-width: auto;
+        }
+
+        .tts-checkbox-label input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .tts-close-btn {
+            width: 100%;
+            padding: 12px;
+            background: #ff4757;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .tts-close-btn:active {
+            background: #e63e4d;
+        }
+
+        /* TTS Play Button on Articles */
+        .tts-play-btn {
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            cursor: pointer;
+            padding: 4px;
+            margin-left: 8px;
+            opacity: 0.6;
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .tts-play-btn:active {
+            transform: scale(0.9);
+        }
+
+        .tts-play-btn.playing {
+            color: #ff4757;
+            opacity: 1;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .list-item.tts-playing {
+            background: #fff8f0;
+            border-left: 3px solid #ff4757;
+        }
+
+        /* TTS Notification */
+        .tts-notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: slideDown 0.3s ease;
+        }
+
+        .tts-notification.fade-out {
+            animation: fadeOut 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; }
+        }
+
+        /* Adjust tab bar when TTS is active */
+        .tab-bar.tts-active {
+            bottom: 130px;
+        }
+
+        /* Mobile optimization */
+        @media (max-width: 768px) {
+            .tts-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 22px;
+            }
+
+            .tts-control-bar {
+                padding: 12px 15px;
+            }
+
+            .tts-title {
+                font-size: 14px;
+            }
+
+            .tts-play-btn {
+                font-size: 18px;
+                padding: 6px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1 id="pageTitle">Inbox</h1>
+            <span id="unreadCount" class="unread-badge">0</span>
+        </div>
+        <div class="header-actions">
+            <button id="searchBtn" class="btn-action btn-search" onclick="toggleSearch()" title="Search">🔍</button>
+            <button id="refreshBtn" class="btn-action btn-refresh" onclick="forceRefresh()" title="Refresh">↻</button>
+            <button class="btn-action btn-mark-all" onclick="markAllAsRead()" title="Mark all as read">✔</button>
+        </div>
+    </div>
+
+    <div id="searchContainer" class="search-container">
+        <input type="text" id="searchInput" class="search-input" placeholder="キーワード検索..."
+            onkeypress="handleSearchKeypress(event)">
+        <button class="search-clear" onclick="clearSearch()" title="Clear">✕</button>
+    </div>
+
+    <div id="pullIndicator"><span>⬇ Pull to refresh</span></div>
+
+    <div id="homeView">
+        <div id="articleList"></div>
+        <div id="loading" class="loading-spinner">Loading more...</div>
+        <div id="sentinel"></div>
+    </div>
+
+    <div id="aiView">
+        <div id="aiList"></div>
+        <div id="aiLoading" class="loading-spinner">analyzing...</div>
+    </div>
+
+    <div id="savedView">
+        <div id="savedList"></div>
+    </div>
+
+    <!-- TTS Control Bar -->
+    <div id="ttsControlBar" class="tts-control-bar">
+        <div class="tts-info">
+            <span id="ttsCurrentTitle" class="tts-title">Not Playing</span>
+            <span id="ttsProgress" class="tts-progress">0/0</span>
+        </div>
+        <div class="tts-controls">
+            <button id="ttsPrevBtn" class="tts-btn" onclick="ttsPrevious()" title="Previous">⏮</button>
+            <button id="ttsPlayPauseBtn" class="tts-btn tts-btn-primary" onclick="ttsTogglePlayPause()" title="Play/Pause">▶</button>
+            <button id="ttsNextBtn" class="tts-btn" onclick="ttsNext()" title="Next">⏭</button>
+            <button id="ttsStopBtn" class="tts-btn" onclick="ttsStop()" title="Stop">⏹</button>
+            <button id="ttsSettingsBtn" class="tts-btn" onclick="ttsToggleSettings()" title="Settings">⚙</button>
+        </div>
+    </div>
+
+    <!-- TTS Settings Panel -->
+    <div id="ttsSettings" class="tts-settings">
+        <div class="tts-settings-content">
+            <h3>TTS Settings</h3>
+            <div class="tts-setting-row">
+                <label>Voice:</label>
+                <select id="ttsVoiceSelect" class="tts-select" onchange="ttsChangeVoice(this.value)"></select>
+            </div>
+            <div class="tts-setting-row">
+                <label>Speed:</label>
+                <input type="range" id="ttsRateSlider" class="tts-slider" min="0.5" max="2" step="0.1" value="1" onchange="ttsChangeRate(this.value)">
+                <span id="ttsRateValue">1.0x</span>
+            </div>
+            <div class="tts-setting-row">
+                <label>Pitch:</label>
+                <input type="range" id="ttsPitchSlider" class="tts-slider" min="0.5" max="2" step="0.1" value="1" onchange="ttsChangePitch(this.value)">
+                <span id="ttsPitchValue">1.0</span>
+            </div>
+            <div class="tts-setting-row">
+                <label class="tts-checkbox-label">
+                    <input type="checkbox" id="ttsAutoPlayNext" checked onchange="ttsToggleAutoPlay(this.checked)">
+                    Auto-play next article
+                </label>
+            </div>
+            <div class="tts-setting-row">
+                <label class="tts-checkbox-label">
+                    <input type="checkbox" id="ttsAutoLoadPage" checked onchange="ttsToggleAutoLoad(this.checked)">
+                    Auto-load next page
+                </label>
+            </div>
+            <button class="tts-close-btn" onclick="ttsToggleSettings()">Close</button>
+        </div>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('home')">🏠</button>
+        <button class="tab-btn ai-tab" onclick="switchTab('ai')">🔥</button>
+        <button class="tab-btn" onclick="switchTab('saved')">⭐️</button>
+    </div>
+
+    <script>
+        let currentArticles = [];
+        let savedIds = new Set();
+        let currentPage = 1;
+        let isLoading = false;
+        let isAllLoaded = false;
+        let readObserver;
+        let currentSearchQuery = ''; // 検索クエリの保持
+
+        let touchStartY = 0;
+        let isPulling = false;
+        const pullThreshold = 80;
+
+        // ----------------------------------------------------
+        // TTS State Management
+        // ----------------------------------------------------
+        const TTS_STORAGE_KEY = 'rss_tts_state';
+        const TTS_SETTINGS_KEY = 'rss_tts_settings';
+        const TTS_QUEUE_KEY = 'rss_tts_queue';
+        const TTS_LOCALE = 'ja-JP';
+
+        let ttsState = {
+            isPlaying: false,
+            isPaused: false,
+            currentIndex: 0,
+            currentTab: 'home',
+            utterance: null,
+            voices: [],
+            selectedVoice: null,
+            rate: 1.0,
+            pitch: 1.0,
+            autoPlayNext: true,
+            autoLoadNextPage: true,
+            resumePosition: null
+        };
+
+        let ttsQueue = {
+            articles: [],
+            currentIndex: 0,
+            totalPages: 1,
+            currentPage: 1
+        };
+
+        let keepAliveInterval = null;
+        let wakeLock = null;
+
+        // ----------------------------------------------------
+        // 検索機能
+        // ----------------------------------------------------
+        function toggleSearch() {
+            const container = document.getElementById('searchContainer');
+            const input = document.getElementById('searchInput');
+            container.classList.toggle('visible');
+            if (container.classList.contains('visible')) {
+                input.focus();
+            }
+        }
+
+        function handleSearchKeypress(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        }
+
+        async function performSearch() {
+            const input = document.getElementById('searchInput');
+            const query = input.value.trim();
+            currentSearchQuery = query;
+
+            // ホームタブに切り替え
+            if (document.getElementById('homeView').style.display !== 'block') {
+                switchTab('home');
+            }
+
+            // リストをリセットして検索結果を取得
+            currentPage = 1;
+            isAllLoaded = false;
+            const list = document.getElementById('articleList');
+            list.innerHTML = '';
+            currentArticles = [];
+
+            // タイトルを更新
+            document.getElementById('pageTitle').textContent = query ? `検索: ${query}` : 'Inbox';
+
+            await fetchArticles(false);
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('searchInput');
+            input.value = '';
+            currentSearchQuery = '';
+            document.getElementById('pageTitle').textContent = 'Inbox';
+
+            // リストをリセットして通常表示に戻す
+            currentPage = 1;
+            isAllLoaded = false;
+            const list = document.getElementById('articleList');
+            list.innerHTML = '';
+            currentArticles = [];
+
+            fetchArticles(false);
+        }
+
+        // ----------------------------------------------------
+        // Utility Functions
+        // ----------------------------------------------------
+        function escapeHtml(unsafe) {
+            return String(unsafe)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // ----------------------------------------------------
+        // TTS Initialization
+        // ----------------------------------------------------
+        function initializeTTS() {
+            if (!('speechSynthesis' in window)) {
+                console.warn('TTS not supported in this browser');
+                return;
+            }
+
+            // Load voices
+            function loadVoices() {
+                ttsState.voices = speechSynthesis.getVoices();
+                const japaneseVoices = ttsState.voices.filter(voice =>
+                    voice.lang.startsWith('ja')
+                );
+
+                if (japaneseVoices.length > 0) {
+                    ttsState.selectedVoice = japaneseVoices[0];
+                } else if (ttsState.voices.length > 0) {
+                    ttsState.selectedVoice = ttsState.voices[0];
+                }
+
+                populateVoiceSelect();
+            }
+
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = loadVoices;
+            }
+            loadVoices();
+
+            loadTTSState();
+            loadTTSSettings();
+
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('beforeunload', saveTTSStateOnExit);
+
+            if (ttsState.resumePosition) {
+                updateTTSControlBar();
+            }
+
+            setupMediaSession();
+        }
+
+        function populateVoiceSelect() {
+            const select = document.getElementById('ttsVoiceSelect');
+            select.innerHTML = '';
+
+            ttsState.voices.forEach((voice, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${voice.name} (${voice.lang})`;
+                select.appendChild(option);
+            });
+
+            if (ttsState.selectedVoice) {
+                const savedIndex = ttsState.voices.indexOf(ttsState.selectedVoice);
+                if (savedIndex >= 0) select.value = savedIndex;
+            }
+        }
+
+        function handleVisibilityChange() {
+            if (document.hidden && ttsState.isPlaying) {
+                startKeepAlive();
+            } else {
+                stopKeepAlive();
+                if (ttsState.isPlaying) {
+                    updateTTSControlBar();
+                }
+            }
+        }
+
+        function startKeepAlive() {
+            keepAliveInterval = setInterval(() => {
+                if (ttsState.isPlaying && !ttsState.isPaused) {
+                    speechSynthesis.pause();
+                    speechSynthesis.resume();
+                }
+            }, 10000);
+        }
+
+        function stopKeepAlive() {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+                keepAliveInterval = null;
+            }
+        }
+
+        function saveTTSStateOnExit() {
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                saveTTSState();
+                saveTTSQueue();
+            }
+            cleanupTTS();
+        }
+
+        // ----------------------------------------------------
+        // TTS Playback Controls
+        // ----------------------------------------------------
+        function ttsPlayArticle(articleUrl, tabIndex = 'home') {
+            const articles = getArticlesForTab(tabIndex);
+            const articleIndex = articles.findIndex(a => a.url === articleUrl);
+
+            if (articleIndex === -1) {
+                console.error('Article not found:', articleUrl);
+                return;
+            }
+
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                speechSynthesis.cancel();
+            }
+
+            ttsQueue.articles = articles;
+            ttsQueue.currentIndex = articleIndex;
+            ttsState.currentTab = tabIndex;
+            ttsState.currentIndex = articleIndex;
+
+            speakArticle(articles[articleIndex]);
+        }
+
+        function speakArticle(article) {
+            if (!article) return;
+
+            const text = article.title_ja || article.title;
+            if (!text) {
+                console.warn('No text to speak for article:', article.url);
+                if (ttsState.autoPlayNext) {
+                    ttsNext();
+                }
+                return;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = TTS_LOCALE;
+            utterance.rate = ttsState.rate;
+            utterance.pitch = ttsState.pitch;
+
+            if (ttsState.selectedVoice) {
+                utterance.voice = ttsState.selectedVoice;
+            }
+
+            utterance.onstart = () => {
+                ttsState.isPlaying = true;
+                ttsState.isPaused = false;
+                ttsState.utterance = utterance;
+                updateTTSControlBar();
+                highlightCurrentArticle(article.url);
+                requestWakeLockOnPlay();
+            };
+
+            utterance.onend = () => {
+                ttsState.isPlaying = false;
+                ttsState.utterance = null;
+                releaseWakeLockOnStop();
+
+                if (ttsState.autoPlayNext) {
+                    ttsNext();
+                } else {
+                    updateTTSControlBar();
+                }
+            };
+
+            utterance.onerror = (event) => {
+                console.error('TTS Error:', event.error);
+                ttsState.isPlaying = false;
+                ttsState.utterance = null;
+                releaseWakeLockOnStop();
+
+                if (event.error !== 'interrupted' && event.error !== 'canceled' && ttsState.autoPlayNext) {
+                    setTimeout(() => ttsNext(), 1000);
+                }
+                updateTTSControlBar();
+            };
+
+            speechSynthesis.speak(utterance);
+            updateMediaSessionMetadata(article);
+        }
+
+        function ttsTogglePlayPause() {
+            if (ttsState.isPlaying && !ttsState.isPaused) {
+                speechSynthesis.pause();
+                ttsState.isPaused = true;
+            } else if (ttsState.isPaused) {
+                speechSynthesis.resume();
+                ttsState.isPaused = false;
+            } else {
+                const currentArticle = ttsQueue.articles[ttsQueue.currentIndex];
+                if (currentArticle) {
+                    speakArticle(currentArticle);
+                }
+            }
+            updateTTSControlBar();
+        }
+
+        function ttsStop() {
+            speechSynthesis.cancel();
+            ttsState.isPlaying = false;
+            ttsState.isPaused = false;
+            ttsState.utterance = null;
+            updateTTSControlBar();
+            clearArticleHighlight();
+            releaseWakeLockOnStop();
+        }
+
+        function ttsNext() {
+            const articles = ttsQueue.articles;
+
+            if (ttsQueue.currentIndex >= articles.length - 1) {
+                if (ttsState.autoLoadNextPage && !isAllLoaded && ttsState.currentTab === 'home') {
+                    loadNextPageAndContinue();
+                    return;
+                } else {
+                    ttsStop();
+                    showTTSNotification('End of articles');
+                    return;
+                }
+            }
+
+            ttsQueue.currentIndex++;
+            ttsState.currentIndex = ttsQueue.currentIndex;
+
+            const nextArticle = articles[ttsQueue.currentIndex];
+            if (nextArticle) {
+                speakArticle(nextArticle);
+            }
+        }
+
+        function ttsPrevious() {
+            if (ttsQueue.currentIndex <= 0) {
+                showTTSNotification('Already at first article');
+                return;
+            }
+
+            speechSynthesis.cancel();
+
+            ttsQueue.currentIndex--;
+            ttsState.currentIndex = ttsQueue.currentIndex;
+
+            const prevArticle = ttsQueue.articles[ttsQueue.currentIndex];
+            if (prevArticle) {
+                speakArticle(prevArticle);
+            }
+        }
+
+        function getArticlesForTab(tab) {
+            if (tab === 'home') {
+                return currentArticles;
+            } else if (tab === 'ai') {
+                const aiItems = document.querySelectorAll('#aiList .list-item');
+                return Array.from(aiItems).map(item => {
+                    const url = item.dataset.url;
+                    return currentArticles.find(a => a.url === url) || { url };
+                });
+            } else if (tab === 'saved') {
+                const savedItems = document.querySelectorAll('#savedList .list-item');
+                return Array.from(savedItems).map(item => {
+                    const url = item.dataset.url;
+                    return currentArticles.find(a => a.url === url) || { url };
+                });
+            }
+            return [];
+        }
+
+        function getCurrentTab() {
+            if (document.getElementById('homeView').style.display === 'block') return 'home';
+            if (document.getElementById('aiView').style.display === 'block') return 'ai';
+            if (document.getElementById('savedView').style.display === 'block') return 'saved';
+            return 'home';
+        }
+
+        // ----------------------------------------------------
+        // TTS Auto-Pagination
+        // ----------------------------------------------------
+        async function loadNextPageAndContinue() {
+            if (isLoading) return;
+
+            showTTSNotification('Loading next page...');
+
+            try {
+                currentPage++;
+                await fetchArticles(false);
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const articles = getArticlesForTab(ttsState.currentTab);
+                ttsQueue.articles = articles;
+
+                if (ttsQueue.currentIndex < articles.length) {
+                    const nextArticle = articles[ttsQueue.currentIndex];
+                    if (nextArticle) {
+                        speakArticle(nextArticle);
+                    }
+                } else {
+                    ttsStop();
+                    showTTSNotification('No more articles');
+                }
+            } catch (error) {
+                console.error('Failed to load next page:', error);
+                ttsStop();
+                showTTSNotification('Failed to load next page');
+                currentPage--;
+            }
+        }
+
+        // ----------------------------------------------------
+        // TTS State Persistence
+        // ----------------------------------------------------
+        function saveTTSState() {
+            const state = {
+                currentIndex: ttsState.currentIndex,
+                currentTab: ttsState.currentTab,
+                isPaused: ttsState.isPaused,
+                rate: ttsState.rate,
+                pitch: ttsState.pitch,
+                autoPlayNext: ttsState.autoPlayNext,
+                autoLoadNextPage: ttsState.autoLoadNextPage
+            };
+
+            const articles = getArticlesForTab(ttsState.currentTab);
+            const currentArticle = articles[ttsState.currentIndex];
+            if (currentArticle) {
+                state.currentArticleUrl = currentArticle.url;
+                state.currentArticleTitle = currentArticle.title_ja || currentArticle.title;
+            }
+
+            localStorage.setItem(TTS_STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function loadTTSState() {
+            try {
+                const saved = localStorage.getItem(TTS_STORAGE_KEY);
+                if (saved) {
+                    const state = JSON.parse(saved);
+
+                    // Validate schema
+                    if (!state || typeof state !== 'object') {
+                        console.warn('Invalid TTS state in localStorage');
+                        localStorage.removeItem(TTS_STORAGE_KEY);
+                        return;
+                    }
+
+                    // Safe assignment with type checks
+                    ttsState.currentIndex = typeof state.currentIndex === 'number' && state.currentIndex >= 0 ? state.currentIndex : 0;
+                    ttsState.currentTab = ['home', 'ai', 'saved'].includes(state.currentTab) ? state.currentTab : 'home';
+                    ttsState.rate = typeof state.rate === 'number' && state.rate >= 0.5 && state.rate <= 2 ? state.rate : 1.0;
+                    ttsState.pitch = typeof state.pitch === 'number' && state.pitch >= 0.5 && state.pitch <= 2 ? state.pitch : 1.0;
+                    ttsState.autoPlayNext = state.autoPlayNext !== false;
+                    ttsState.autoLoadNextPage = state.autoLoadNextPage !== false;
+
+                    if (state.currentArticleUrl && typeof state.currentArticleUrl === 'string') {
+                        ttsState.resumePosition = {
+                            tabIndex: ttsState.currentTab,
+                            articleUrl: state.currentArticleUrl,
+                            articleTitle: state.currentArticleTitle || '',
+                            timestamp: Date.now()
+                        };
+                    }
+
+                    document.getElementById('ttsRateSlider').value = ttsState.rate;
+                    document.getElementById('ttsRateValue').textContent = ttsState.rate.toFixed(1) + 'x';
+                    document.getElementById('ttsPitchSlider').value = ttsState.pitch;
+                    document.getElementById('ttsPitchValue').textContent = ttsState.pitch.toFixed(1);
+                    document.getElementById('ttsAutoPlayNext').checked = ttsState.autoPlayNext;
+                    document.getElementById('ttsAutoLoadPage').checked = ttsState.autoLoadNextPage;
+                }
+            } catch (e) {
+                console.error('Error loading TTS state:', e);
+                localStorage.removeItem(TTS_STORAGE_KEY);
+            }
+        }
+
+        function saveTTSSettings() {
+            const settings = {
+                rate: ttsState.rate,
+                pitch: ttsState.pitch,
+                selectedVoiceIndex: ttsState.voices.indexOf(ttsState.selectedVoice),
+                autoPlayNext: ttsState.autoPlayNext,
+                autoLoadNextPage: ttsState.autoLoadNextPage
+            };
+            localStorage.setItem(TTS_SETTINGS_KEY, JSON.stringify(settings));
+        }
+
+        function loadTTSSettings() {
+            try {
+                const saved = localStorage.getItem(TTS_SETTINGS_KEY);
+                if (saved) {
+                    const settings = JSON.parse(saved);
+                    ttsState.rate = settings.rate || 1.0;
+                    ttsState.pitch = settings.pitch || 1.0;
+                    ttsState.autoPlayNext = settings.autoPlayNext !== false;
+                    ttsState.autoLoadNextPage = settings.autoLoadNextPage !== false;
+                }
+            } catch (e) {
+                console.error('Error loading TTS settings:', e);
+            }
+        }
+
+        function saveTTSQueue() {
+            const queue = {
+                articleUrls: ttsQueue.articles.slice(0, 100).map(a => ({ url: a.url })),
+                currentIndex: ttsQueue.currentIndex,
+                currentPage: ttsQueue.currentPage,
+                currentTab: ttsState.currentTab
+            };
+
+            try {
+                localStorage.setItem(TTS_QUEUE_KEY, JSON.stringify(queue));
+            } catch (e) {
+                console.warn('TTS queue save failed, storage may be full:', e);
+            }
+        }
+
+        function clearTTSState() {
+            localStorage.removeItem(TTS_STORAGE_KEY);
+            localStorage.removeItem(TTS_QUEUE_KEY);
+            ttsState.resumePosition = null;
+        }
+
+        // ----------------------------------------------------
+        // TTS UI Updates
+        // ----------------------------------------------------
+        function updateTTSControlBar() {
+            const controlBar = document.getElementById('ttsControlBar');
+            const titleEl = document.getElementById('ttsCurrentTitle');
+            const progressEl = document.getElementById('ttsProgress');
+            const playPauseBtn = document.getElementById('ttsPlayPauseBtn');
+            const tabBar = document.querySelector('.tab-bar');
+
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                controlBar.classList.add('visible');
+                tabBar.classList.add('tts-active');
+            } else {
+                controlBar.classList.remove('visible');
+                tabBar.classList.remove('tts-active');
+            }
+
+            const currentArticle = ttsQueue.articles[ttsQueue.currentIndex];
+            if (currentArticle) {
+                titleEl.textContent = currentArticle.title_ja || currentArticle.title;
+            } else {
+                titleEl.textContent = 'Not Playing';
+            }
+
+            progressEl.textContent = `${ttsQueue.currentIndex + 1}/${ttsQueue.articles.length}`;
+
+            if (ttsState.isPlaying && !ttsState.isPaused) {
+                playPauseBtn.textContent = '⏸';
+            } else {
+                playPauseBtn.textContent = '▶';
+            }
+
+            updateArticlePlayButtons();
+        }
+
+        function updateArticlePlayButtons() {
+            document.querySelectorAll('.tts-play-btn').forEach(btn => {
+                btn.classList.remove('playing');
+                btn.textContent = '🔊';
+            });
+
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                const currentArticle = ttsQueue.articles[ttsQueue.currentIndex];
+                if (currentArticle) {
+                    const listItem = document.querySelector(`[data-url="${currentArticle.url}"]`);
+                    if (listItem) {
+                        const playBtn = listItem.querySelector('.tts-play-btn');
+                        if (playBtn) {
+                            playBtn.classList.add('playing');
+                            playBtn.textContent = ttsState.isPaused ? '⏸' : '🔊';
+                        }
+                    }
+                }
+            }
+        }
+
+        function highlightCurrentArticle(articleUrl) {
+            document.querySelectorAll('.list-item').forEach(item => {
+                item.classList.remove('tts-playing');
+            });
+
+            const listItem = document.querySelector(`[data-url="${articleUrl}"]`);
+            if (listItem) {
+                listItem.classList.add('tts-playing');
+            }
+        }
+
+        function clearArticleHighlight() {
+            document.querySelectorAll('.list-item').forEach(item => {
+                item.classList.remove('tts-playing');
+            });
+        }
+
+        // ----------------------------------------------------
+        // TTS Settings Panel
+        // ----------------------------------------------------
+        function ttsToggleSettings() {
+            const settings = document.getElementById('ttsSettings');
+            settings.classList.toggle('visible');
+        }
+
+        function ttsChangeVoice(value) {
+            const index = parseInt(value);
+            if (index >= 0 && index < ttsState.voices.length) {
+                ttsState.selectedVoice = ttsState.voices[index];
+                saveTTSSettings();
+
+                if (ttsState.isPlaying || ttsState.isPaused) {
+                    const currentArticle = ttsQueue.articles[ttsQueue.currentIndex];
+                    if (currentArticle) {
+                        speechSynthesis.cancel();
+                        speakArticle(currentArticle);
+                    }
+                }
+            }
+        }
+
+        function ttsChangeRate(value) {
+            ttsState.rate = parseFloat(value);
+            document.getElementById('ttsRateValue').textContent = ttsState.rate.toFixed(1) + 'x';
+            saveTTSSettings();
+        }
+
+        function ttsChangePitch(value) {
+            ttsState.pitch = parseFloat(value);
+            document.getElementById('ttsPitchValue').textContent = ttsState.pitch.toFixed(1);
+            saveTTSSettings();
+        }
+
+        function ttsToggleAutoPlay(checked) {
+            ttsState.autoPlayNext = checked;
+            saveTTSSettings();
+        }
+
+        function ttsToggleAutoLoad(checked) {
+            ttsState.autoLoadNextPage = checked;
+            saveTTSSettings();
+        }
+
+        function showTTSNotification(message) {
+            const existing = document.querySelector('.tts-notification');
+            if (existing) existing.remove();
+
+            const notification = document.createElement('div');
+            notification.className = 'tts-notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.classList.add('fade-out');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // ----------------------------------------------------
+        // Media Session API
+        // ----------------------------------------------------
+        function setupMediaSession() {
+            if (!('mediaSession' in navigator)) return;
+
+            navigator.mediaSession.setActionHandler('play', () => {
+                ttsTogglePlayPause();
+            });
+
+            navigator.mediaSession.setActionHandler('pause', () => {
+                ttsTogglePlayPause();
+            });
+
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                ttsPrevious();
+            });
+
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                ttsNext();
+            });
+
+            navigator.mediaSession.setActionHandler('stop', () => {
+                ttsStop();
+            });
+        }
+
+        function updateMediaSessionMetadata(article) {
+            if (!('mediaSession' in navigator) || !article) return;
+
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: article.title_ja || article.title,
+                artist: article.source || 'News Feed',
+                album: 'RSS Articles'
+            });
+
+            navigator.mediaSession.playbackState = (ttsState.isPlaying && !ttsState.isPaused) ? 'playing' : 'paused';
+        }
+
+        // ----------------------------------------------------
+        // Wake Lock
+        // ----------------------------------------------------
+        async function requestWakeLockOnPlay() {
+            try {
+                if ('wakeLock' in navigator && ttsState.isPlaying && !ttsState.isPaused) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.error('Wake Lock error:', err);
+            }
+        }
+
+        function releaseWakeLockOnStop() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
+        // ----------------------------------------------------
+        // Cleanup
+        // ----------------------------------------------------
+        function cleanupTTS() {
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                speechSynthesis.cancel();
+            }
+            stopKeepAlive();
+            releaseWakeLockOnStop();
+            ttsState.isPlaying = false;
+            ttsState.isPaused = false;
+            ttsState.utterance = null;
+            updateTTSControlBar();
+            clearArticleHighlight();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // 1. まずはDBのデータを高速表示
+            switchTab('home');
+            setupReadObserver();
+            setupPullToRefresh();
+
+            // Initialize TTS
+            initializeTTS();
+
+            // 2. 起動から少し遅延させて自動更新を実行（refresh=true）
+            setTimeout(() => {
+                console.log("Auto-refresh triggered on load");
+                forceRefresh();
+            }, 1000);
+        });
+
+        // ----------------------------------------------------
+        // 手動/自動更新用関数
+        // ----------------------------------------------------
+        function forceRefresh() {
+            // ホームタブ以外にいる場合はホームに戻して更新
+            if (document.getElementById('homeView').style.display !== 'block') {
+                switchTab('home');
+            }
+
+            // ボタンを回す
+            const btn = document.getElementById('refreshBtn');
+            btn.classList.add('spinning');
+
+            fetchArticles(true).then(() => {
+                // 完了したら回転を止める
+                setTimeout(() => btn.classList.remove('spinning'), 500);
+            });
+        }
+
+        // ----------------------------------------------------
+        // 無限スクロールの心臓部
+        // ----------------------------------------------------
+        const scrollObserver = new IntersectionObserver((entries) => {
+            // 見張り役(sentinel)が見えて、ロード中でなくて、まだ記事があるなら
+            if (entries[0].isIntersecting && !isLoading && !isAllLoaded && document.getElementById('homeView').style.display === 'block') {
+                currentPage++; // 次のページ番号へ
+                fetchArticles(false); // 追加読み込み
+            }
+        }, { rootMargin: '200px' }); // 早めに読み込むように余白を設定
+
+        // ----------------------------------------------------
+        // 記事取得ロジック
+        // ----------------------------------------------------
+        async function fetchArticles(isRefresh = false) {
+            if (isLoading) return;
+            isLoading = true;
+
+            const spinner = document.getElementById('loading');
+            const list = document.getElementById('articleList');
+            const sentinel = document.getElementById('sentinel');
+
+            // リフレッシュ（引っ張って更新 or ボタン）の時だけリセット
+            if (isRefresh) {
+                currentPage = 1;
+                isAllLoaded = false;
+                list.innerHTML = '';
+                currentArticles = [];
+                scrollObserver.unobserve(sentinel); // 一旦監視解除
+            }
+
+            spinner.style.display = 'block';
+
+            try {
+                if (isRefresh || currentPage === 1) await updateSavedIds();
+
+                // 検索クエリがあればパラメータに追加
+                let apiUrl = `/api/fetch-rss?page=${currentPage}&refresh=${isRefresh}`;
+                if (currentSearchQuery) {
+                    apiUrl += `&search=${encodeURIComponent(currentSearchQuery)}`;
+                }
+                const res = await fetch(apiUrl);
+                const data = await res.json();
+
+                spinner.style.display = 'none';
+
+                if (data.articles && data.articles.length > 0) {
+                    data.articles.forEach(article => {
+                        currentArticles.push(article);
+                        const item = createItem(article);
+                        list.appendChild(item);
+                        readObserver.observe(item);
+                    });
+
+                    // 読み込んだ後に監視再開
+                    scrollObserver.observe(sentinel);
+
+                } else if (currentSearchQuery && data.articles && data.articles.length === 0) {
+                    // 検索結果が0件の場合
+                    isAllLoaded = true;
+                    scrollObserver.unobserve(sentinel);
+                    list.innerHTML = `
+                        <div class="search-status">
+                            <div class="icon">🔍</div>
+                            <div>「${currentSearchQuery}」に一致する記事が見つかりませんでした</div>
+                        </div>
+                    `;
+                } else {
+                    // 記事がもうない場合
+                    isAllLoaded = true;
+                    scrollObserver.unobserve(sentinel); // 監視終了
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                isLoading = false;
+                updateUnreadCount();
+            }
+        }
+
+        // ----------------------------------------------------
+        // その他の機能（変更なし）
+        // ----------------------------------------------------
+        function setupPullToRefresh() {
+            const container = document.body;
+            const indicator = document.getElementById('pullIndicator');
+            container.addEventListener('touchstart', (e) => {
+                if (window.scrollY === 0) { touchStartY = e.touches[0].clientY; isPulling = true; }
+            }, { passive: true });
+            container.addEventListener('touchmove', (e) => {
+                if (!isPulling) return;
+                const diff = e.touches[0].clientY - touchStartY;
+                if (diff > 0 && window.scrollY === 0) {
+                    const height = Math.min(diff * 0.4, 100);
+                    indicator.style.height = `${height}px`;
+                    indicator.innerHTML = height > 40 ? "⬆ Release to refresh" : "⬇ Pull to refresh";
+                    if (e.cancelable && diff < pullThreshold + 20) e.preventDefault();
+                }
+            }, { passive: false });
+            container.addEventListener('touchend', () => {
+                if (!isPulling) return;
+                isPulling = false;
+                if (parseInt(indicator.style.height || '0') > 40) {
+                    indicator.style.height = '50px'; indicator.innerHTML = '↻ Updating...'; indicator.classList.add('loading');
+                    fetchArticles(true).then(() => {
+                        setTimeout(() => { indicator.style.height = '0'; indicator.classList.remove('loading'); }, 500);
+                    });
+                } else { indicator.style.height = '0'; }
+            });
+        }
+
+        function updateUnreadCount() {
+            let count = 0;
+            if (document.getElementById('homeView').style.display === 'block') {
+                count = document.querySelectorAll('#articleList .list-item:not(.read)').length;
+            } else if (document.getElementById('aiView').style.display === 'block') {
+                count = document.querySelectorAll('#aiList .list-item:not(.read)').length;
+            }
+            const badge = document.getElementById('unreadCount');
+            badge.textContent = count;
+            if (count > 0) badge.classList.add('visible'); else badge.classList.remove('visible');
+        }
+
+        function markAllAsRead() {
+            const activeListId = document.getElementById('homeView').style.display === 'block' ? 'articleList' : 'aiList';
+            const unreadItems = document.querySelectorAll(`#${activeListId} .list-item:not(.read)`);
+            if (unreadItems.length === 0) return;
+            const urlsToMark = [];
+            unreadItems.forEach(item => {
+                item.classList.add('read');
+                if (item.dataset.url) urlsToMark.push(item.dataset.url);
+            });
+            if (urlsToMark.length > 0) {
+                fetch('/api/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: urlsToMark }) });
+            }
+            updateUnreadCount();
+        }
+
+        function setupReadObserver() {
+            readObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
+                        const el = entry.target;
+                        const url = el.dataset.url;
+                        if (url && !el.classList.contains('read')) {
+                            el.classList.add('read');
+                            updateUnreadCount();
+                            fetch('/api/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: [url] }) });
+                        }
+                    }
+                });
+            }, { rootMargin: '0px' });
+        }
+
+        async function switchTab(tab) {
+            // Save TTS state before switching
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                saveTTSState();
+            }
+
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('homeView').style.display = 'none';
+            document.getElementById('aiView').style.display = 'none';
+            document.getElementById('savedView').style.display = 'none';
+
+            if (tab === 'home') {
+                document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+                document.getElementById('homeView').style.display = 'block';
+                document.getElementById('pageTitle').textContent = 'Inbox';
+                // 検索状態をリセット
+                currentSearchQuery = '';
+                document.getElementById('searchInput').value = '';
+                document.getElementById('searchContainer').classList.remove('visible');
+                // まだ記事が空なら初回ロード（リフレッシュはしない）
+                if (document.getElementById('articleList').children.length === 0) fetchArticles(false);
+                setTimeout(() => scrollObserver.observe(document.getElementById('sentinel')), 500);
+            } else if (tab === 'ai') {
+                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+                document.getElementById('aiView').style.display = 'block';
+                document.getElementById('pageTitle').textContent = 'For You';
+                loadAiArticles();
+            } else {
+                document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
+                document.getElementById('savedView').style.display = 'block';
+                document.getElementById('pageTitle').textContent = 'Saved';
+                loadSavedArticles();
+            }
+            setTimeout(updateUnreadCount, 100);
+        }
+
+        async function loadAiArticles() {
+            const list = document.getElementById('aiList');
+            const spinner = document.getElementById('aiLoading');
+            list.innerHTML = ''; spinner.style.display = 'block';
+            try {
+                await updateSavedIds();
+                const res = await fetch('/api/recommend');
+                const data = await res.json();
+                spinner.style.display = 'none';
+                if (data.articles && data.articles.length > 0) {
+                    data.articles.forEach(article => {
+                        const item = createItem(article, true);
+                        list.appendChild(item);
+                        readObserver.observe(item);
+                    });
+                }
+            } catch (e) { } finally { updateUnreadCount(); }
+        }
+
+        async function loadSavedArticles() {
+            const list = document.getElementById('savedList');
+            list.innerHTML = '';
+            try {
+                const res = await fetch('/api/save-article', { method: 'POST', body: JSON.stringify({ action: 'list' }) });
+                const data = await res.json();
+                data.articles.forEach(a => list.appendChild(createItem(a)));
+            } catch (e) { }
+        }
+
+        function createItem(article, isAi = false) {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.dataset.url = article.url;
+            if (article.is_read === 1) div.classList.add('read');
+            const isSaved = savedIds.has(article.url);
+
+            const date = new Date(article.published_at);
+            const now = new Date();
+            const diffMin = Math.floor((now - date) / 60000);
+            let timeStr = "";
+            if (diffMin < 60) timeStr = diffMin + "m";
+            else if (diffMin < 1440) timeStr = Math.floor(diffMin / 60) + "h";
+            else timeStr = Math.floor(diffMin / 1440) + "d";
+
+            let aiHtml = isAi && article.score ? `<span class="ai-match">${Math.floor(article.score * 100)}%</span>` : "";
+            let displaySource = escapeHtml(article.source || '不明');
+            let displayTitle = escapeHtml(article.title_ja || article.title);
+            let safeUrl = escapeHtml(article.url);
+
+            div.innerHTML = `
+                <div class="left-col">
+                    <button class="star-btn ${isSaved ? 'saved' : ''}" onclick="toggleSave(this, '${safeUrl}')">${isSaved ? '★' : '☆'}</button>
+                    <span class="time-tag mobile">${timeStr}</span>
+                </div>
+                <div class="item-content">
+                    <a href="${safeUrl}" target="_blank" class="content-link" onclick="recordClick(this, '${safeUrl}')">
+                        <span class="inline-source">${displaySource}</span>${aiHtml}<span class="title-text">${displayTitle}</span>
+                    </a>
+                    <button class="tts-play-btn" data-url="${safeUrl}">🔊</button>
+                    <span class="time-tag pc">${timeStr}</span>
+                </div>
+            `;
+
+            // Add TTS button event listener separately to avoid onclick injection
+            const ttsBtn = div.querySelector('.tts-play-btn');
+            if (ttsBtn) {
+                ttsBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    ttsPlayArticle(article.url, getCurrentTab());
+                });
+            }
+            return div;
+        }
+
+        function recordClick(linkElement, url) {
+            const listItem = linkElement.closest('.list-item');
+            if (listItem && !listItem.classList.contains('read')) {
+                listItem.classList.add('read');
+                updateUnreadCount();
+                fetch('/api/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls: [url] }) });
+            }
+            fetch('/api/record-click', { method: 'POST', body: JSON.stringify({ article_id: url }) });
+        }
+
+        async function toggleSave(btn, url) {
+            const article = currentArticles.find(a => a.url === url) || { url: url };
+            const isSaved = btn.classList.contains('saved');
+            const action = isSaved ? 'delete' : 'save';
+            btn.classList.toggle('saved'); btn.textContent = isSaved ? '☆' : '★';
+            if (action === 'save') savedIds.add(url); else savedIds.delete(url);
+            await fetch('/api/save-article', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, article }) });
+        }
+
+        async function updateSavedIds() {
+            try {
+                const res = await fetch('/api/save-article', { method: 'POST', body: JSON.stringify({ action: 'list' }) });
+                const data = await res.json();
+                savedIds = new Set(data.articles.map(a => a.url));
+            } catch (e) { }
+        }
+    </script>
+</body>
+
+</html>

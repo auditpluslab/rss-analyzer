@@ -1,0 +1,17 @@
+name = "rss-reader-pwa"
+pages_build_output_dir = "public"
+compatibility_date = "2024-01-01"
+
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rss-db"
+database_id = "1724daea-5083-4912-8ac0-fec5a7364163"
+
+[ai]
+binding = "AI"
+
+[[services]]
+binding = "ANALYZER"
+service = "rss-analyzer"
