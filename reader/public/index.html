@@ -182,14 +182,14 @@
 
         /* メインリンク */
         .content-link {
-            display: -webkit-box;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
             text-decoration: none;
             color: #111;
             font-size: 14px;
             line-height: 1.4;
-            -webkit-line-clamp: 2;
             min-height: 2.8em;
             transition: color 0.3s;
         }
@@ -219,12 +219,9 @@
             min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
-            word-break: break-word;
-            display: -webkit-box;
-            -webkit-box-orient: vertical;
-            -webkit-line-clamp: 1;
+            white-space: nowrap;
+            word-break: normal;
             line-height: 1.4;
-            min-height: 1.4em;
         }
 
         /* タブレット端末専用の調整 (600px以上 1024px以下) */
@@ -611,7 +608,8 @@
             color: #666;
             cursor: pointer;
             padding: 4px;
-            margin-left: 8px;
+            margin-left: 4px;
+            flex-shrink: 0;
             opacity: 0.6;
             transition: all 0.2s;
             -webkit-tap-highlight-color: transparent;
