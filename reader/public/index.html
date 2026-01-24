@@ -196,15 +196,21 @@
         }
 
         .inline-source {
-            display: inline-block;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
             font-size: 10px;
             font-weight: 700;
             color: #555;
             background: #eee;
-            padding: 1px 6px;
+            padding: 4px 6px;
             border-radius: 3px;
             margin-right: 6px;
             vertical-align: 1px;
+            width: 2.5em;
+            word-break: break-all;
+            line-height: 1.2;
         }
 
         .ai-match {
@@ -239,7 +245,8 @@
             /* ソース名のタグも少し大きく */
             .inline-source {
                 font-size: 12px;
-                padding: 2px 8px;
+                width: 2.8em;
+                padding: 4px 6px;
             }
         }
 
@@ -739,9 +746,8 @@
             <span id="ttsProgress" class="tts-progress">0/0</span>
         </div>
         <div class="tts-controls">
-            <button id="ttsPrevBtn" class="tts-btn" onclick="ttsPrevious()" title="Previous">⏮</button>
+            <button id="ttsSpeedBtn" class="tts-btn" onclick="ttsCycleSpeed()" title="Speed">1.0x</button>
             <button id="ttsPlayPauseBtn" class="tts-btn tts-btn-primary" onclick="ttsTogglePlayPause()" title="Play/Pause">▶</button>
-            <button id="ttsNextBtn" class="tts-btn" onclick="ttsNext()" title="Next">⏭</button>
             <button id="ttsStopBtn" class="tts-btn" onclick="ttsStop()" title="Stop">⏹</button>
             <button id="ttsSettingsBtn" class="tts-btn" onclick="ttsToggleSettings()" title="Settings">⚙</button>
         </div>
@@ -1049,6 +1055,7 @@
                 updateTTSControlBar();
                 highlightCurrentArticle(article.url);
                 requestWakeLockOnPlay();
+                startSilentAudio(); // Start silent audio for Safari background playback
             };
 
             utterance.onend = () => {
@@ -1060,6 +1067,7 @@
                     ttsNext();
                 } else {
                     updateTTSControlBar();
+                    stopSilentAudio(); // Stop silent audio when not auto-playing next
                 }
             };
 
@@ -1103,6 +1111,39 @@
             updateTTSControlBar();
             clearArticleHighlight();
             releaseWakeLockOnStop();
+            stopSilentAudio();
+        }
+
+        function ttsCycleSpeed() {
+            const speeds = [1.0, 1.5, 2.0];
+            const currentIndex = speeds.indexOf(ttsState.rate);
+            const nextIndex = (currentIndex + 1) % speeds.length;
+            ttsState.rate = speeds[nextIndex];
+
+            // Update the button text
+            const speedBtn = document.getElementById('ttsSpeedBtn');
+            if (speedBtn) {
+                speedBtn.textContent = ttsState.rate.toFixed(1) + 'x';
+            }
+
+            // Update settings sliders and displays
+            const rateSlider = document.getElementById('ttsRateSlider');
+            const rateValue = document.getElementById('ttsRateValue');
+            if (rateSlider) rateSlider.value = ttsState.rate;
+            if (rateValue) rateValue.textContent = ttsState.rate.toFixed(1) + 'x';
+
+            // Restart current utterance with new speed if playing
+            if (ttsState.isPlaying || ttsState.isPaused) {
+                speechSynthesis.cancel();
+                const currentArticle = ttsQueue.articles[ttsQueue.currentIndex];
+                if (currentArticle) {
+                    speakArticle(currentArticle);
+                }
+            }
+
+            saveTTSState();
+            saveTTSSettings();
+            showTTSNotification('Speed: ' + ttsState.rate.toFixed(1) + 'x');
         }
 
         function ttsNext() {
@@ -1327,6 +1368,7 @@
             const titleEl = document.getElementById('ttsCurrentTitle');
             const progressEl = document.getElementById('ttsProgress');
             const playPauseBtn = document.getElementById('ttsPlayPauseBtn');
+            const speedBtn = document.getElementById('ttsSpeedBtn');
             const tabBar = document.querySelector('.tab-bar');
 
             if (ttsState.isPlaying || ttsState.isPaused) {
@@ -1345,6 +1387,11 @@
             }
 
             progressEl.textContent = `${ttsQueue.currentIndex + 1}/${ttsQueue.articles.length}`;
+
+            // Update speed button text
+            if (speedBtn) {
+                speedBtn.textContent = ttsState.rate.toFixed(1) + 'x';
+            }
 
             if (ttsState.isPlaying && !ttsState.isPaused) {
                 playPauseBtn.textContent = '⏸';
@@ -1384,6 +1431,8 @@
             const listItem = document.querySelector(`[data-url="${articleUrl}"]`);
             if (listItem) {
                 listItem.classList.add('tts-playing');
+                // Auto-scroll to bring current article into view
+                listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
@@ -1514,6 +1563,48 @@
         }
 
         // ----------------------------------------------------
+        // Safari Background Playback Support (Silent Audio Hack)
+        // ----------------------------------------------------
+        let audioContext = null;
+        let silentAudioSource = null;
+
+        function startSilentAudio() {
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                // Create a silent audio buffer (1 second of silence)
+                const bufferSize = audioContext.sampleRate * 1; // 1 second
+                const silentBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const channelData = silentBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    channelData[i] = 0; // Silence
+                }
+
+                silentAudioSource = audioContext.createBufferSource();
+                silentAudioSource.buffer = silentBuffer;
+                silentAudioSource.loop = true;
+                silentAudioSource.connect(audioContext.destination);
+                silentAudioSource.start(0);
+            } catch (err) {
+                console.warn('Silent audio not supported:', err);
+            }
+        }
+
+        function stopSilentAudio() {
+            try {
+                if (silentAudioSource) {
+                    silentAudioSource.stop();
+                    silentAudioSource.disconnect();
+                    silentAudioSource = null;
+                }
+            } catch (err) {
+                console.warn('Error stopping silent audio:', err);
+            }
+        }
+
+        // ----------------------------------------------------
         // Cleanup
         // ----------------------------------------------------
         function cleanupTTS() {
@@ -1522,6 +1613,7 @@
             }
             stopKeepAlive();
             releaseWakeLockOnStop();
+            stopSilentAudio(); // Stop silent audio
             ttsState.isPlaying = false;
             ttsState.isPaused = false;
             ttsState.utterance = null;
