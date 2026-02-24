@@ -95,38 +95,38 @@ async function runLLMAnalysis(ai, model, title) {
 async function setupTags(env, ai) {
   const tagList = [
     // ▼ テクノロジー
-    "半導体", "生成AI", "SaaS", "クラウド", "サイバーセキュリティ", 
-    "データセンター", "ブロックチェーン", "暗号資産", "宇宙ビジネス", 
+    "半導体", "生成AI", "SaaS", "クラウド", "サイバーセキュリティ",
+    "データセンター", "ブロックチェーン", "暗号資産", "宇宙ビジネス",
     "量子コンピュータ", "ロボティクス", "スタートアップ",
     // ▼ 製造・モビリティ
-    "自動車", "EV", "電池", "自動運転", "機械", "素材", "化学", 
+    "自動車", "EV", "電池", "自動運転", "機械", "素材", "化学",
     "鉄鋼", "航空宇宙", "防衛産業", "物流", "ドローン",
     // ▼ 金融・経済
-    "マクロ経済", "金利", "為替", "インフレ", "中央銀行", "決算", 
+    "マクロ経済", "金利", "為替", "インフレ", "中央銀行", "決算",
     "M&A", "IPO", "FinTech", "銀行", "保険", "証券", "投資ファンド",
     // ▼ 生活・ヘルスケア
-    "ヘルスケア", "医薬品", "バイオ", "医療機器", "小売", "EC", 
+    "ヘルスケア", "医薬品", "バイオ", "医療機器", "小売", "EC",
     "食品", "不動産", "建設", "インバウンド", "観光", "エンタメ", "ゲーム",
     // ▼ エネルギー・環境
-    "エネルギー", "原油", "脱炭素", "再生可能エネルギー", "ESG", 
+    "エネルギー", "原油", "脱炭素", "再生可能エネルギー", "ESG",
     "電力", "資源", "農業",
     // ▼ 政治
-    "政治", "選挙", "規制", "米中対立", "地政学リスク", 
+    "政治", "選挙", "規制", "米中対立", "地政学リスク",
     "中国経済", "米国経済", "欧州経済", "新興国"
   ];
 
   const vectors = [];
-  
+
   // ★修正ポイント：10個ずつまとめてAIに送る（回数制限対策）
   const batchSize = 10;
-  
+
   for (let i = 0; i < tagList.length; i += batchSize) {
     // 10個取り出す
     const batch = tagList.slice(i, i + batchSize);
-    
+
     // まとめてベクトル化（これでAPI呼び出しは1回で済む）
     const embeddingsResponse = await ai.run('@cf/baai/bge-m3', { text: batch });
-    
+
     // 結果を整形
     for (let j = 0; j < batch.length; j++) {
       vectors.push({
@@ -197,7 +197,26 @@ Japanese:`;
     const response = await ai.run('@cf/meta/llama-3.2-3b-instruct', {
       messages: [{ role: 'user', content: prompt }]
     });
-    return (response.response || '').trim();
+
+    let translated = (response.response || '').trim();
+
+    // クォーテーションで囲まれている場合は削除
+    translated = translated.replace(/^["']|["']$/g, '').trim();
+
+    // 余計なプレフィックスが付いている場合の対策（"Here is the translation:" など）
+    const lowerTranslated = translated.toLowerCase();
+    if (lowerTranslated.startsWith('here is') || lowerTranslated.startsWith('translation:')) {
+      const parts = translated.split('\n');
+      translated = parts[parts.length - 1].replace(/^["']|["']$/g, '').trim();
+    }
+
+    // 翻訳結果に日本語が含まれていない場合はエラーとして扱い、フォールバックさせる
+    if (!containsJapanese(translated)) {
+      console.warn('Translation output does not contain Japanese:', translated);
+      return null;
+    }
+
+    return translated;
   } catch (e) {
     console.error('Translation failed:', e);
     return null;
