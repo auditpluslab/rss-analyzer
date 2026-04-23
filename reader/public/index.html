@@ -308,6 +308,7 @@
 
         .list-item.read {
             background-color: #fafafa;
+            opacity: 0.35;
         }
 
         /* タブバー */
@@ -699,6 +700,111 @@
                 font-size: 18px;
                 padding: 6px;
             }
+        }
+
+        /* ─── Priority Tier Sections ─── */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 16px 4px;
+            position: sticky;
+            top: 52px;
+            z-index: 5;
+            background: #fff;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .section-header:focus-visible {
+            outline: 2px solid #0070f3;
+            outline-offset: -2px;
+        }
+        .section-label {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .section-count {
+            font-size: 11px;
+            color: #999;
+            font-weight: 400;
+        }
+        .section-toggle {
+            font-size: 11px;
+            color: #999;
+            transition: transform 0.2s;
+        }
+        .tier-must .section-label { color: #ff4757; }
+        .tier-check .section-label { color: #f39c12; }
+        .tier-skim .section-label { color: #999; }
+        .tier-none .section-label { color: #bbb; }
+
+        /* Section collapse */
+        .section-collapsed .tier-cards { display: none; }
+        .section-collapsed .section-toggle { transform: rotate(-90deg); }
+        .section-actions { display: flex; align-items: center; gap: 6px; }
+        .mark-all-read-btn {
+            border: none; background: none; cursor: pointer;
+            font-size: 11px; color: #aaa; padding: 2px 4px; border-radius: 3px;
+        }
+        .mark-all-read-btn:hover { color: #666; background: #f0f0f0; }
+
+        /* Empty section message */
+        .tier-empty {
+            padding: 6px 16px;
+            font-size: 12px;
+            color: #ccc;
+            text-align: center;
+        }
+
+        /* ─── Common tier row — all 1-line ─── */
+        .must-card, .check-card, .skim-card, .none-card {
+            background: #fff;
+            padding: 3px 16px !important;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px;
+        }
+        /* Tier accents */
+        .must-card { border-left: 3px solid #ff4757; padding-left: 13px; }
+        .check-card { border-left: 3px solid #f39c12; padding-left: 13px; }
+        /* Shared elements */
+        .must-card .star-btn, .check-card .star-btn, .skim-card .star-btn, .none-card .star-btn {
+            flex-shrink: 0 !important; font-size: 13px !important; width: auto !important;
+            border: none; background: none; cursor: pointer; padding: 0 !important; line-height: 1;
+        }
+        .must-card .tts-play-btn, .check-card .tts-play-btn, .skim-card .tts-play-btn, .none-card .tts-play-btn {
+            flex-shrink: 0; font-size: 13px !important; border: none; background: none; cursor: pointer;
+            padding: 0 !important; line-height: 1; margin-left: 0 !important; opacity: 1 !important;
+        }
+        .source-badge {
+            background: #eee; color: #555; padding: 1px 6px; border-radius: 3px;
+            font-size: 10px; font-weight: 600; flex-shrink: 0;
+            width: 24px; text-align: center; display: inline-block;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .sentiment-dot {
+            width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;
+        }
+        .sentiment-positive { background: #27ae60; }
+        .sentiment-negative { background: #e74c3c; }
+        .sentiment-neutral { background: #bbb; }
+        .tier-time { color: #ccc; font-size: 10px; flex-shrink: 0; }
+        .must-card .card-title, .check-card .card-title, .skim-card .card-title, .none-card .card-title {
+            font-size: 13px; color: #333; font-weight: 400;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            flex: 1; margin-bottom: 0; display: block;
+            text-decoration: none;
+        }
+        .must-card .card-title { font-weight: 500; color: #111; }
+        .tag {
+            font-size: 10px; color: #888; background: #f5f5f5;
+            padding: 1px 5px; border-radius: 3px; flex-shrink: 0;
         }
     </style>
 </head>
@@ -1681,7 +1787,6 @@
             if (isRefresh) {
                 currentPage = 1;
                 isAllLoaded = false;
-                list.innerHTML = '';
                 currentArticles = [];
                 scrollObserver.unobserve(sentinel); // 一旦監視解除
             }
@@ -1701,13 +1806,34 @@
 
                 spinner.style.display = 'none';
 
+                // 検索モード時は従来の平坦なリスト表示
+                const isSearch = !!currentSearchQuery;
+
+                if (isRefresh) {
+                    list.innerHTML = '';
+                }
+
+                // 初回またはリフレッシュ時にティアセクションを初期化（検索モード以外）
+                if ((isRefresh || currentPage === 1) && !isSearch && list.querySelector('[data-tier]') === null) {
+                    initTierSections(list);
+                }
+
                 if (data.articles && data.articles.length > 0) {
-                    data.articles.forEach(article => {
+                    data.articles.filter(a => a.is_read !== 1).forEach(article => {
                         currentArticles.push(article);
-                        const item = createItem(article);
-                        list.appendChild(item);
-                        readObserver.observe(item);
+                        if (isSearch) {
+                            // 検索モード: 従来の平坦リスト
+                            const item = createItem(article);
+                            list.appendChild(item);
+                            readObserver.observe(item);
+                        } else {
+                            // ティアモード: セクションに振り分け
+                            appendToTier(list, article);
+                        }
                     });
+
+                    // 空セクション表示を更新
+                    if (!isSearch) updateEmptySections(list);
 
                     // 読み込んだ後に監視再開
                     scrollObserver.observe(sentinel);
@@ -1725,6 +1851,7 @@
                 } else {
                     // 記事がもうない場合
                     isAllLoaded = true;
+                    if (!isSearch && list.querySelector('[data-tier]')) updateEmptySections(list);
                     scrollObserver.unobserve(sentinel); // 監視終了
                 }
             } catch (e) {
@@ -1861,7 +1988,7 @@
                         readObserver.observe(item);
                     });
                 }
-            } catch (e) { } finally { updateUnreadCount(); }
+            } catch (e) { console.error('AI articles load failed:', e); } finally { updateUnreadCount(); }
         }
 
         async function loadSavedArticles() {
@@ -1871,7 +1998,7 @@
                 const res = await fetch('/api/save-article', { method: 'POST', body: JSON.stringify({ action: 'list' }) });
                 const data = await res.json();
                 data.articles.forEach(a => list.appendChild(createItem(a)));
-            } catch (e) { }
+            } catch (e) { console.error('Saved articles load failed:', e); }
         }
 
         function createItem(article, isAi = false) {
@@ -1889,7 +2016,7 @@
             else if (diffMin < 1440) timeStr = Math.floor(diffMin / 60) + "h";
             else timeStr = Math.floor(diffMin / 1440) + "d";
 
-            let aiHtml = isAi && article.score ? `<span class="ai-match">${Math.floor(article.score * 100)}%</span>` : "";
+            let aiHtml = isAi && article.score ? `<span class="ai-match">${Math.floor(article.score)}%</span>` : "";
             let displaySource = escapeHtml(article.source || '不明');
             let displayTitle = escapeHtml(article.title_ja || article.title);
             let safeUrl = escapeHtml(article.url);
@@ -1920,6 +2047,210 @@
             return div;
         }
 
+        // ----------------------------------------------------
+        // Priority Tier helpers & templates
+        // ----------------------------------------------------
+        function getTier(score) {
+            if (score === null || score === undefined || score === 0) return 'none';
+            if (score >= 80) return 'must';
+            if (score >= 50) return 'check';
+            return 'skim';
+        }
+
+        function getArticleContext(article) {
+            const isSaved = savedIds.has(article.url);
+            const date = new Date(article.published_at);
+            const now = new Date();
+            const diffMin = Math.floor((now - date) / 60000);
+            let timeStr = "";
+            if (diffMin < 60) timeStr = diffMin + "m";
+            else if (diffMin < 1440) timeStr = Math.floor(diffMin / 60) + "h";
+            else timeStr = Math.floor(diffMin / 1440) + "d";
+            const safeUrl = escapeHtml(article.url);
+            const rawTitle = article.title_ja || article.title || '';
+            const displayTitle = escapeHtml(rawTitle.split(/\s*[|｜]\s*/)[0].trim() || rawTitle);
+            const displaySource = escapeHtml(article.source || '不明');
+            const sentiment = (article.sentiment || 'NEUTRAL').toLowerCase();
+            const tags = article.tags ? article.tags.split(',').filter(t => t.trim()) : [];
+            return { isSaved, timeStr, safeUrl, displayTitle, displaySource, sentiment, tags };
+        }
+
+        function createMustReadItem(article) {
+            const div = document.createElement('div');
+            div.className = 'must-card list-item';
+            div.dataset.url = article.url;
+            if (article.is_read === 1) div.classList.add('read');
+            const ctx = getArticleContext(article);
+            const tagsHtml = ctx.tags.slice(0, 2).map(t => `<span class="tag">${escapeHtml(t.trim())}</span>`).join('');
+            div.innerHTML = `
+                <button class="star-btn ${ctx.isSaved ? 'saved' : ''}" onclick="toggleSave(this, '${ctx.safeUrl}')">${ctx.isSaved ? '★' : '☆'}</button>
+                <span class="source-badge">${ctx.displaySource}</span>
+                <span class="sentiment-dot sentiment-${ctx.sentiment}" aria-label="${ctx.sentiment}"></span>
+                <a href="${ctx.safeUrl}" target="_blank" class="card-title" onclick="recordClick(this, '${ctx.safeUrl}')">${ctx.displayTitle}</a>
+                ${tagsHtml}
+                <span class="tier-time">${ctx.timeStr}</span>
+                <button class="tts-play-btn" data-url="${ctx.safeUrl}" aria-label="読み上げ">🔊</button>`;
+            const ttsBtn = div.querySelector('.tts-play-btn');
+            if (ttsBtn) ttsBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); ttsPlayArticle(article.url, getCurrentTab()); });
+            return div;
+        }
+
+        function createCheckItem(article) {
+            const div = document.createElement('div');
+            div.className = 'check-card list-item';
+            div.dataset.url = article.url;
+            if (article.is_read === 1) div.classList.add('read');
+            const ctx = getArticleContext(article);
+            div.innerHTML = `
+                <button class="star-btn ${ctx.isSaved ? 'saved' : ''}" onclick="toggleSave(this, '${ctx.safeUrl}')">${ctx.isSaved ? '★' : '☆'}</button>
+                <span class="source-badge">${ctx.displaySource}</span>
+                <span class="sentiment-dot sentiment-${ctx.sentiment}" aria-label="${ctx.sentiment}"></span>
+                <a href="${ctx.safeUrl}" target="_blank" class="card-title" onclick="recordClick(this, '${ctx.safeUrl}')">${ctx.displayTitle}</a>
+                <span class="tier-time">${ctx.timeStr}</span>
+                <button class="tts-play-btn" data-url="${ctx.safeUrl}" aria-label="読み上げ">🔊</button>`;
+            const ttsBtn = div.querySelector('.tts-play-btn');
+            if (ttsBtn) ttsBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); ttsPlayArticle(article.url, getCurrentTab()); });
+            return div;
+        }
+
+        function createSkimItem(article) {
+            const div = document.createElement('div');
+            div.className = 'skim-card list-item';
+            div.dataset.url = article.url;
+            if (article.is_read === 1) div.classList.add('read');
+            const ctx = getArticleContext(article);
+            div.innerHTML = `
+                <button class="star-btn ${ctx.isSaved ? 'saved' : ''}" onclick="toggleSave(this, '${ctx.safeUrl}')">${ctx.isSaved ? '★' : '☆'}</button>
+                <span class="source-badge">${ctx.displaySource}</span>
+                <span class="sentiment-dot sentiment-${ctx.sentiment}" aria-label="${ctx.sentiment}"></span>
+                <a href="${ctx.safeUrl}" target="_blank" class="card-title" onclick="recordClick(this, '${ctx.safeUrl}')">${ctx.displayTitle}</a>
+                <span class="tier-time">${ctx.timeStr}</span>
+                <button class="tts-play-btn" data-url="${ctx.safeUrl}" aria-label="読み上げ">🔊</button>`;
+            const ttsBtn = div.querySelector('.tts-play-btn');
+            if (ttsBtn) ttsBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); ttsPlayArticle(article.url, getCurrentTab()); });
+            return div;
+        }
+
+        function createNoneItem(article) {
+            const div = document.createElement('div');
+            div.className = 'none-card list-item';
+            div.dataset.url = article.url;
+            if (article.is_read === 1) div.classList.add('read');
+            const ctx = getArticleContext(article);
+            div.innerHTML = `
+                <button class="star-btn ${ctx.isSaved ? 'saved' : ''}" onclick="toggleSave(this, '${ctx.safeUrl}')">${ctx.isSaved ? '★' : '☆'}</button>
+                <span class="source-badge">${ctx.displaySource}</span>
+                <a href="${ctx.safeUrl}" target="_blank" class="card-title" onclick="recordClick(this, '${ctx.safeUrl}')">${ctx.displayTitle}</a>
+                <span class="tier-time">${ctx.timeStr}</span>
+                <button class="tts-play-btn" data-url="${ctx.safeUrl}" aria-label="読み上げ">🔊</button>`;
+            const ttsBtn = div.querySelector('.tts-play-btn');
+            if (ttsBtn) ttsBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); ttsPlayArticle(article.url, getCurrentTab()); });
+            return div;
+        }
+
+        function createTierItem(article) {
+            const tier = getTier(article.score);
+            switch (tier) {
+                case 'must': return createMustReadItem(article);
+                case 'check': return createCheckItem(article);
+                case 'skim': return createSkimItem(article);
+                default: return createNoneItem(article);
+            }
+        }
+
+        function initTierSections(list) {
+            list.innerHTML = `
+                <div class="tier-must" data-tier="must">
+                    <div class="section-header" tabindex="0" role="button" aria-expanded="true" onclick="toggleSection(this)">
+                        <div class="section-label">● 必読 <span class="section-count">0</span></div>
+                        <div class="section-actions"><button class="mark-all-read-btn" onclick="event.stopPropagation(); markAllRead('must')">✔</button><span class="section-toggle">▼</span></div>
+                    </div>
+                    <div class="tier-cards"></div>
+                </div>
+                <div class="tier-check" data-tier="check">
+                    <div class="section-header" tabindex="0" role="button" aria-expanded="true" onclick="toggleSection(this)">
+                        <div class="section-label">● 要チェック <span class="section-count">0</span></div>
+                        <div class="section-actions"><button class="mark-all-read-btn" onclick="event.stopPropagation(); markAllRead('check')">✔</button><span class="section-toggle">▼</span></div>
+                    </div>
+                    <div class="tier-cards"></div>
+                </div>
+                <div class="tier-skim" data-tier="skim">
+                    <div class="section-header" tabindex="0" role="button" aria-expanded="true" onclick="toggleSection(this)">
+                        <div class="section-label">— 流し読み <span class="section-count">0</span></div>
+                        <div class="section-actions"><button class="mark-all-read-btn" onclick="event.stopPropagation(); markAllRead('skim')">✔</button><span class="section-toggle">▼</span></div>
+                    </div>
+                    <div class="tier-cards"></div>
+                </div>
+                <div class="tier-none" data-tier="none">
+                    <div class="section-header" tabindex="0" role="button" aria-expanded="true" onclick="toggleSection(this)">
+                        <div class="section-label">○ 未分類 <span class="section-count">0</span></div>
+                        <div class="section-actions"><button class="mark-all-read-btn" onclick="event.stopPropagation(); markAllRead('none')">✔</button><span class="section-toggle">▼</span></div>
+                    </div>
+                    <div class="tier-cards"></div>
+                </div>`;
+        }
+
+        function toggleSection(headerEl) {
+            const section = headerEl.closest('[data-tier]');
+            const isCollapsed = section.classList.toggle('section-collapsed');
+            headerEl.setAttribute('aria-expanded', !isCollapsed);
+        }
+
+        async function markAllRead(tier) {
+            const section = document.querySelector(`[data-tier="${tier}"]`);
+            if (!section) return;
+            const cards = section.querySelectorAll('.tier-cards .list-item');
+            const urls = [];
+            cards.forEach(el => {
+                if (!el.classList.contains('read')) {
+                    el.classList.add('read');
+                    if (el.dataset.url) urls.push(el.dataset.url);
+                }
+            });
+            if (urls.length > 0) {
+                fetch('/api/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls }) }).catch(e => console.error(e));
+            }
+            // Remove cards after a brief moment
+            setTimeout(() => {
+                cards.forEach(el => el.remove());
+                updateEmptySections(document.getElementById('articleList'));
+                updateUnreadCount();
+            }, 300);
+        }
+
+        function appendToTier(list, article) {
+            const tier = getTier(article.score);
+            const section = list.querySelector(`[data-tier="${tier}"]`);
+            if (!section) return;
+            const cards = section.querySelector('.tier-cards');
+            const item = createTierItem(article);
+            cards.appendChild(item);
+            readObserver.observe(item);
+            // Update count
+            const countEl = section.querySelector('.section-count');
+            countEl.textContent = cards.children.length;
+            // Remove empty message if present
+            const emptyEl = cards.querySelector('.tier-empty');
+            if (emptyEl) emptyEl.remove();
+        }
+
+        function updateEmptySections(list) {
+            ['must', 'check', 'skim', 'none'].forEach(tier => {
+                const section = list.querySelector(`[data-tier="${tier}"]`);
+                if (!section) return;
+                const cards = section.querySelector('.tier-cards');
+                const existing = cards.querySelector('.tier-empty');
+                if (cards.children.length === 0 && !existing) {
+                    const empty = document.createElement('div');
+                    empty.className = 'tier-empty';
+                    empty.textContent = 'このティアの記事はありません';
+                    cards.appendChild(empty);
+                } else if (cards.children.length > 0 && existing) {
+                    existing.remove();
+                }
+            });
+        }
+
         function recordClick(linkElement, url) {
             const listItem = linkElement.closest('.list-item');
             if (listItem && !listItem.classList.contains('read')) {
@@ -1944,7 +2275,7 @@
                 const res = await fetch('/api/save-article', { method: 'POST', body: JSON.stringify({ action: 'list' }) });
                 const data = await res.json();
                 savedIds = new Set(data.articles.map(a => a.url));
-            } catch (e) { }
+            } catch (e) { console.error('Saved IDs update failed:', e); }
         }
     </script>
 </body>
