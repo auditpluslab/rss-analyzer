@@ -7,8 +7,8 @@ export async function onRequest(context) {
     "radionikkei.jp", "rt.com", "techcrunch.com", "ft.com", 
     "jetro.go.jp", "nli-research.co.jp", "jri.co.jp", 
     "tech.nikkeibp.co.jp", "cao.go.jp", "mhlw.go.jp", 
-    "kkj.go.jp", "boj.or.jp", "nikkei.com", "toyokeizai.net", 
-    "meti.go.jp", "fsa.go.jp"
+    "kkj.go.jp", "boj.or.jp", "nikkei.com", "news.google.com",
+    "toyokeizai.net", "meti.go.jp", "fsa.go.jp"
   ];
 
   try {

@@ -20,7 +20,10 @@ export async function onRequest(context) {
     { name: "ラジオ日経", url: "https://www.radionikkei.jp/podcast/cn_shinsou/rss.xml" },
     { name: "日経X", url: "https://tech.nikkeibp.co.jp/rss/index.rdf" },
     { name: "日経ビジネス", url: "https://business.nikkei.com/rss/all_nb.rdf" },
-    { name: "日経", url: "https://assets.wor.jp/rss/rdf/nikkei/news.rdf" },
+    { name: "日経Biz", url: "https://assets.wor.jp/rss/rdf/nikkei/business.rdf" },
+    { name: "日経国際", url: "https://assets.wor.jp/rss/rdf/nikkei/international.rdf" },
+    { name: "日経Tech", url: "https://assets.wor.jp/rss/rdf/nikkei/technology.rdf" },
+    { name: "日経GN", url: "https://news.google.com/rss/search?q=site:nikkei.com&hl=ja&gl=JP&ceid=JP:ja" },
     { name: "東洋経済", url: "https://toyokeizai.net/list/feed/rss" },
 
     // --- 公的機関・研究所 ---
@@ -245,7 +248,13 @@ async function fetchWithTimeout(url) {
   } catch (e) { clearTimeout(id); throw e; }
 }
 
-function cleanTitle(t) { return t ? t.replace("<![CDATA[", "").replace("]]>", "").trim() : ""; }
+function cleanTitle(t) {
+  if (!t) return "";
+  return t
+    .replace("<![CDATA[", "").replace("]]>", "")
+    .replace(/\s*[-–—|]\s*(日本経済新聞|日経ビジネス|Nikkei Asia|Nikkei|Financial Times|FT|ロイター|Reuters|ブルームバーグ|Bloomberg|共同通信|時事通信).*$/i, "")
+    .trim();
+}
 
 function containsJapanese(text) {
   return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(text);
