@@ -15,6 +15,7 @@ jobs:
           node-version: 24
 
       - name: Deploy Reader
-        run: npx wrangler pages deploy reader/public --project-name=rss-reader-pwa
+        working-directory: reader
+        run: npx wrangler pages deploy public --project-name=rss-reader-pwa
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
