@@ -23,10 +23,9 @@ export async function onRequest(context) {
     { name: "日経Biz", url: "https://assets.wor.jp/rss/rdf/nikkei/business.rdf" },
     { name: "日経国際", url: "https://assets.wor.jp/rss/rdf/nikkei/international.rdf" },
     { name: "日経Tech", url: "https://assets.wor.jp/rss/rdf/nikkei/technology.rdf" },
-    { name: "日経経済", url: "https://assets.wor.jp/rss/rdf/nikkei/economics.rdf" },
-    { name: "日経政治", url: "https://assets.wor.jp/rss/rdf/nikkei/politics.rdf" },
     { name: "日経市場", url: "https://assets.wor.jp/rss/rdf/nikkei/markets.rdf" },
-    { name: "日経産業", url: "https://assets.wor.jp/rss/rdf/nikkei/industry.rdf" },
+    { name: "日経地域", url: "https://assets.wor.jp/rss/rdf/nikkei/local.rdf" },
+    { name: "日経スポ", url: "https://assets.wor.jp/rss/rdf/nikkei/sports.rdf" },
     { name: "東洋経済", url: "https://toyokeizai.net/list/feed/rss" },
 
     // --- 公的機関・研究所 ---
