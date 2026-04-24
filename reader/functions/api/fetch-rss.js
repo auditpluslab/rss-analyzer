@@ -25,6 +25,7 @@ export async function onRequest(context) {
     { name: "日経Tech", url: "https://assets.wor.jp/rss/rdf/nikkei/technology.rdf" },
     { name: "日経市場", url: "https://assets.wor.jp/rss/rdf/nikkei/markets.rdf" },
     { name: "日経地域", url: "https://assets.wor.jp/rss/rdf/nikkei/local.rdf" },
+    { name: "日経速報", url: "https://assets.wor.jp/rss/rdf/nikkei/news.rdf" },
     { name: "日経スポ", url: "https://assets.wor.jp/rss/rdf/nikkei/sports.rdf" },
     { name: "東洋経済", url: "https://toyokeizai.net/list/feed/rss" },
 
