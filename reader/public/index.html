@@ -2223,6 +2223,7 @@
             const section = list.querySelector(`[data-tier="${tier}"]`);
             if (!section) return;
             const cards = section.querySelector('.tier-cards');
+            if (!cards) return;
             const item = createTierItem(article);
             cards.appendChild(item);
             readObserver.observe(item);
