@@ -6,7 +6,7 @@ export async function onRequest(context) {
   const limit = 50;
   const offset = (page - 1) * limit;
 
-  // 1. 取得するRSSの定義（24個のURL、20種のソース名）
+  // 1. 取得するRSSの定義（27個のURL、24種のソース名）
   const rssFeeds = [
     // --- 海外・ビジネス ---
     { name: "AccT", url: "https://www.accountingtoday.com/feed?rss=true" },
@@ -23,7 +23,10 @@ export async function onRequest(context) {
     { name: "日経Biz", url: "https://assets.wor.jp/rss/rdf/nikkei/business.rdf" },
     { name: "日経国際", url: "https://assets.wor.jp/rss/rdf/nikkei/international.rdf" },
     { name: "日経Tech", url: "https://assets.wor.jp/rss/rdf/nikkei/technology.rdf" },
-    { name: "日経GN", url: "https://news.google.com/rss/search?q=site:nikkei.com&hl=ja&gl=JP&ceid=JP:ja" },
+    { name: "日経経済", url: "https://assets.wor.jp/rss/rdf/nikkei/economics.rdf" },
+    { name: "日経政治", url: "https://assets.wor.jp/rss/rdf/nikkei/politics.rdf" },
+    { name: "日経市場", url: "https://assets.wor.jp/rss/rdf/nikkei/markets.rdf" },
+    { name: "日経産業", url: "https://assets.wor.jp/rss/rdf/nikkei/industry.rdf" },
     { name: "東洋経済", url: "https://toyokeizai.net/list/feed/rss" },
 
     // --- 公的機関・研究所 ---
@@ -182,7 +185,7 @@ export async function onRequest(context) {
 // === 以下、共通関数 (Date Parser 最強版) ===
 function extractItems(xml) {
   const items = [];
-  const regex = /<(item|entry)[^>]*>([\s\S]*?)<\/\1>/g;
+  const regex = /<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/g;
   let match;
   while ((match = regex.exec(xml)) !== null) {
     const c = match[2];
