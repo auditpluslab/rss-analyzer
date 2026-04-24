@@ -53,9 +53,9 @@ export async function onRequest(context) {
 
   try {
     if (page === 1 && refresh) {
-      // 既存のタイトルを取得（重複チェック用）
-      const existingTitlesResult = await db.prepare("SELECT title FROM articles").all();
-      const existingTitles = new Set(existingTitlesResult.results.map(r => r.title));
+      // URLベースの重複チェック（DBのON CONFLICT(url)と整合）
+      const existingUrlsResult = await db.prepare("SELECT url FROM articles").all();
+      const existingUrls = new Set(existingUrlsResult.results.map(r => r.url));
 
       const responses = await Promise.allSettled(rssFeeds.map(feed => fetchWithTimeout(feed.url)));
       let articlesToSave = [];
@@ -67,10 +67,10 @@ export async function onRequest(context) {
           items.forEach(item => {
             if (item.title && item.link) {
               const cleanedTitle = cleanTitle(item.title);
-              // タイトル重複チェック：既存タイトルがあればスキップ
-              if (!existingTitles.has(cleanedTitle)) {
+              // URL重複チェック：既存URLがあればスキップ
+              if (!existingUrls.has(item.link)) {
                 articlesToSave.push({ ...item, source: sourceName, cleanedTitle });
-                existingTitles.add(cleanedTitle); // 今回の処理内での重複も防ぐ
+                existingUrls.add(item.link);
               }
             }
           });
@@ -241,7 +241,7 @@ function extractItems(xml) {
 
 async function fetchWithTimeout(url) {
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), 10000);
+  const id = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: controller.signal });
     clearTimeout(id); return await res.text();
