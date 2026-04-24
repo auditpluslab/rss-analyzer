@@ -3,13 +3,16 @@ export async function onRequest(context) {
 
   // 【表示制限用】このリストに含まれるドメインのみを表示対象にする
   const allowedDomains = [
-    "accountingtoday.com", "gateway.caixin.com", "mckinsey.com", 
-    "radionikkei.jp", "rt.com", "techcrunch.com", "ft.com", 
-    "jetro.go.jp", "nli-research.co.jp", "jri.co.jp", 
-    "tech.nikkeibp.co.jp", "cao.go.jp", "mhlw.go.jp", 
-    "kkj.go.jp", "boj.or.jp", "nikkei.com", "news.google.com",
-    "toyokeizai.net", "meti.go.jp", "fsa.go.jp"
+    "accountingtoday.com", "gateway.caixin.com", "mckinsey.com",
+    "radionikkei.jp", "rt.com", "techcrunch.com", "ft.com",
+    "jetro.go.jp", "nli-research.co.jp", "jri.co.jp",
+    "tech.nikkeibp.co.jp", "cao.go.jp", "mhlw.go.jp",
+    "kkj.go.jp", "boj.or.jp", "nikkei.com",
+    "toyokeizai.net", "meti.go.jp", "fsa.go.jp",
+    "asia.nikkei.com"
   ];
+
+  const gnSources = ["日経政治", "日経文化", "日経生活", "日経社説", "日経科学", "日経医療", "日経教育", "Nikkei Asia"];
 
   try {
     // 1. 保存記事（ウェイト5.0）と既読記事（ウェイト1.0）を取得
@@ -54,16 +57,17 @@ export async function onRequest(context) {
       }
     }
 
-    // 3. 全「未読記事」かつ「厳選ドメイン」の記事のみを取得
+    // 3. 全「未読記事」かつ「厳選ドメイン or GN source名」の記事のみを取得
     const domainConditions = allowedDomains.map(() => "url LIKE ?").join(" OR ");
+    const sourceConditions = gnSources.map(() => "source = ?").join(" OR ");
     const { results: unreadArticles } = await db.prepare(`
       SELECT url, title, source, published_at, description, category, embedding, is_saved, score
-      FROM articles 
-      WHERE is_read = 0 
+      FROM articles
+      WHERE is_read = 0
       AND embedding IS NOT NULL
-      AND (${domainConditions})
+      AND ((${domainConditions}) OR (${sourceConditions}))
       ORDER BY published_at DESC LIMIT 300
-    `).bind(...allowedDomains.map(d => `%${d}%`)).all();
+    `).bind(...allowedDomains.map(d => `%${d}%`), ...gnSources).all();
 
     // 4. ハイブリッドスコア（類似度70% + AIスコア30%）を計算してソート
     const scoredArticles = unreadArticles.map(article => {
