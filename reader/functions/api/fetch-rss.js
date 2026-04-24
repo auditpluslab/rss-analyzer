@@ -6,7 +6,7 @@ export async function onRequest(context) {
   const limit = 50;
   const offset = (page - 1) * limit;
 
-  // 1. 取得するRSSの定義（27個のURL、24種のソース名）
+  // 1. 取得するRSSの定義
   const rssFeeds = [
     // --- 海外・ビジネス ---
     { name: "AccT", url: "https://www.accountingtoday.com/feed?rss=true" },
@@ -27,6 +27,7 @@ export async function onRequest(context) {
     { name: "日経地域", url: "https://assets.wor.jp/rss/rdf/nikkei/local.rdf" },
     { name: "日経速報", url: "https://assets.wor.jp/rss/rdf/nikkei/news.rdf" },
     { name: "日経スポ", url: "https://assets.wor.jp/rss/rdf/nikkei/sports.rdf" },
+    { name: "日経経済", url: "https://assets.wor.jp/rss/rdf/nikkei/economy.rdf" },
     { name: "東洋経済", url: "https://toyokeizai.net/list/feed/rss" },
 
     // --- 公的機関・研究所 ---
@@ -60,19 +61,19 @@ export async function onRequest(context) {
       const existingUrlsResult = await db.prepare("SELECT url FROM articles").all();
       const existingUrls = new Set(existingUrlsResult.results.map(r => r.url));
 
+      // 全フィード並列取得
       const responses = await Promise.allSettled(rssFeeds.map(feed => fetchWithTimeout(feed.url)));
       let articlesToSave = [];
 
-      responses.forEach((result, index) => {
+      rssFeeds.forEach((feed, idx) => {
+        const result = responses[idx];
         if (result.status === "fulfilled") {
-          const sourceName = rssFeeds[index].name;
           const items = extractItems(result.value);
           items.forEach(item => {
             if (item.title && item.link) {
               const cleanedTitle = cleanTitle(item.title);
-              // URL重複チェック：既存URLがあればスキップ
               if (!existingUrls.has(item.link)) {
-                articlesToSave.push({ ...item, source: sourceName, cleanedTitle });
+                articlesToSave.push({ ...item, source: feed.name, cleanedTitle });
                 existingUrls.add(item.link);
               }
             }
