@@ -12,7 +12,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Deploy Reader
         run: npx wrangler pages deploy reader/public --project-name=rss-reader-pwa
