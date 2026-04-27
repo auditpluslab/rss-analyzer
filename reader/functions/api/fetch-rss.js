@@ -1,3 +1,5 @@
+import { rescoreWithProfile, PROFILE } from './_profile.js';
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
   const page = parseInt(url.searchParams.get("page")) || 1;
@@ -197,7 +199,8 @@ export async function onRequest(context) {
           const analysis = analysisResults[idx] || {};
           const translation = translationResults[idx] || { title_ja: item.title };
           const sentiment = analysis.sentiment || "NEUTRAL";
-          const score = analysis.score || 0;
+          const rawScore = analysis.score || 0;
+          const score = rescoreWithProfile(item.cleanedTitle, rawScore, PROFILE);
           const tags = (analysis.all_tags && Array.isArray(analysis.all_tags)) ? analysis.all_tags.join(",") : "";
 
           return stmt.bind(
