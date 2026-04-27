@@ -1,0 +1,45 @@
+{
+  "user_interest_profile": {
+    "core_identity": {
+      "profession": ["CPA", "Consulting Partner", "Cross-border Business Leader"],
+      "primary_targets": ["Enterprise", "CFO", "CIO", "VC (Venture Capital)"],
+      "market_focus": ["Japan", "China", "APAC"]
+    },
+    "domains_and_weights": {
+      "business_and_strategy": {
+        "weight": 1.5,
+        "positive_keywords": [
+          "クロスボーダー", "海外進出", "エンタープライズDX", "基幹システム再構築",
+          "財務ガバナンス", "データコンプライアンス", "B2Bマーケティング", "リードジェネレーション"
+        ]
+      },
+      "technology_and_architecture": {
+        "weight": 1.5,
+        "positive_keywords": [
+          "Vibe Coding", "AI Agent", "Agentic Workflow", "LLM", "Claude", "GLM-5", "Qwen",
+          "Cloudflare", "Cloudflare Workers", "Cloudflare R2", "Cloudflare D1",
+          "Next.js", "Supabase", "自動化パイプライン", "RAG"
+        ]
+      },
+      "conceptual_and_social_systems": {
+        "weight": 1.2,
+        "positive_keywords": [
+          "社会システム理論", "ニクラス・ルーマン", "自己言及", "エコシステム",
+          "デジタルカルト", "宗教のメカニズム", "コミュニティ形成", "ブランド構築"
+        ]
+      },
+      "lifestyle_and_niche": {
+        "weight": 0.8,
+        "positive_keywords": [
+          "バレーボール", "スポーツ大会運営", "ベテラン向けコミュニティ",
+          "分解遊び", "STEM教育", "機械式時計", "カメラの構造"
+        ]
+      }
+    },
+    "filtering_rules": {
+      "negative_keywords": [
+        "B2C向け単発キャンペーン", "個人向けガジェットレビュー", "暗号資産の価格変動"
+      ]
+    }
+  }
+}
