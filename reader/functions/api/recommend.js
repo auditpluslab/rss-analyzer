@@ -1,3 +1,5 @@
+import { keywordMatchScore, PROFILE } from './_profile.js';
+
 export async function onRequest(context) {
   const db = context.env.DB;
 
@@ -69,18 +71,25 @@ export async function onRequest(context) {
       ORDER BY published_at DESC LIMIT 300
     `).bind(...allowedDomains.map(d => `%${d}%`), ...gnSources).all();
 
-    // 4. ハイブリッドスコア（類似度70% + AIスコア30%）を計算してソート
+    // 4. 3シグナルスコア（行動40% + キーワード40% + AI 20%）を計算してソート
+    const hasBehavioralData = userVector !== null;
+
     const scoredArticles = unreadArticles.map(article => {
       const vec = JSON.parse(article.embedding);
       if (!vec || vec.length === 0) return { ...article, finalScore: -1 };
-      
-      const similarity = cosineSimilarity(userVector, vec);
-      const articleScore = article.score || 0; // DBに保存されているAIスコア(0-100)
-      
-      // ハイブリッドスコア: 類似度70% + 重要度30%
-      const finalScore = (similarity * 0.7) + ((articleScore / 100) * 0.3);
-      
-      return { ...article, finalScore, similarity };
+
+      const articleScore = article.score || 0;
+      const kwScore = keywordMatchScore(article.title, PROFILE);
+
+      let finalScore;
+      if (hasBehavioralData) {
+        const similarity = cosineSimilarity(userVector, vec);
+        finalScore = (similarity * 0.4) + (kwScore * 0.4) + ((articleScore / 100) * 0.2);
+      } else {
+        finalScore = (kwScore * 0.8) + ((articleScore / 100) * 0.2);
+      }
+
+      return { ...article, finalScore, similarity: hasBehavioralData ? cosineSimilarity(userVector, vec) : 0 };
     });
 
     scoredArticles.sort((a, b) => b.finalScore - a.finalScore);
