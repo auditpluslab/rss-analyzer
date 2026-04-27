@@ -69,7 +69,10 @@ async function analyzeArticle(request, env, ai) {
 
 async function runLLMAnalysis(ai, model, title) {
   const prompt = `
-  Analyze the news title for a business executive.
+  Analyze the news title for a CPA and Consulting Partner focused on cross-border business (Japan-China-APAC).
+  Key interests (weighted): Enterprise DX & financial governance (1.5x), AI/LLM/Agents & serverless architecture (1.5x), Social systems & ecosystem building (1.2x).
+  Prioritize: enterprise/B2B perspectives, technology-business strategy intersections, APAC market dynamics, CFO/CIO decision-making.
+  Deprioritize: B2C campaigns, consumer gadgets, crypto price speculation.
   News Title: "${title}"
   Task:
   1. Sentiment: POSITIVE, NEGATIVE, or NEUTRAL.
@@ -112,7 +115,11 @@ async function setupTags(env, ai) {
     "電力", "資源", "農業",
     // ▼ 政治
     "政治", "選挙", "規制", "米中対立", "地政学リスク",
-    "中国経済", "米国経済", "欧州経済", "新興国"
+    "中国経済", "米国経済", "欧州経済", "新興国",
+    // ▼ プロファイル固有タグ
+    "クロスボーダー", "エンタープライズDX", "基幹システム再構築",
+    "財務ガバナンス", "データコンプライアンス", "AI Agent",
+    "Agentic Workflow", "サーバーレス", "RAG"
   ];
 
   const vectors = [];
