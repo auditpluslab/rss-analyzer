@@ -41,13 +41,8 @@ async function analyzeArticle(request, env, ai) {
       .filter(m => m.score > 0.45)
       .map(m => m.metadata.tag);
 
-    // --- B. 分析 (LLM) ---
-    let analysisResult = await runLLMAnalysis(ai, '@cf/meta/llama-3.2-1b-instruct', title);
-
-    if (!analysisResult) {
-      console.log("1B failed, switching to 8B...");
-      analysisResult = await runLLMAnalysis(ai, '@cf/meta/llama-3-8b-instruct', title);
-    }
+    // --- B. 分析 (Gemini) ---
+    let analysisResult = await runGeminiAnalysis(env.GEMINI_API_KEY, title);
 
     const safeResult = analysisResult || { sentiment: "NEUTRAL", score: 50, keyword: "None" };
 
@@ -67,27 +62,53 @@ async function analyzeArticle(request, env, ai) {
   }
 }
 
-async function runLLMAnalysis(ai, model, title) {
-  const prompt = `
-  Analyze the news title for a CPA and Consulting Partner focused on cross-border business (Japan-China-APAC).
-  Key interests (weighted): Enterprise DX & financial governance (1.5x), AI/LLM/Agents & serverless architecture (1.5x), Social systems & ecosystem building (1.2x).
-  Prioritize: enterprise/B2B perspectives, technology-business strategy intersections, APAC market dynamics, CFO/CIO decision-making.
-  Deprioritize: B2C campaigns, consumer gadgets, crypto price speculation.
-  News Title: "${title}"
-  Task:
-  1. Sentiment: POSITIVE, NEGATIVE, or NEUTRAL.
-  2. Score: 0-100 (Importance).
-  3. Keyword: Extract ONE most specific and important keyword from the title.
-  Output JSON ONLY: {"sentiment": "...", "score": 0, "keyword": "..."}
-  `;
+async function runGeminiAnalysis(apiKey, title) {
+  const prompt = `Analyze the news title for a CPA and Consulting Partner focused on cross-border business (Japan-China-APAC).
+Key interests (weighted): Enterprise DX & financial governance (1.5x), AI/LLM/Agents & serverless architecture (1.5x), Social systems & ecosystem building (1.2x).
+Prioritize: enterprise/B2B perspectives, technology-business strategy intersections, APAC market dynamics, CFO/CIO decision-making.
+Deprioritize: B2C campaigns, consumer gadgets, crypto price speculation.
+News Title: "${title}"
+Task:
+1. Sentiment: POSITIVE, NEGATIVE, or NEUTRAL.
+2. Score: 0-100 (Importance to this professional profile. Most general news should score 20-40. Only highly relevant articles should score 60+).
+3. Keyword: Extract ONE most specific and important keyword from the title.
+Output JSON ONLY: {"sentiment": "...", "score": 0, "keyword": "..."}`;
 
   try {
-    const response = await ai.run(model, { messages: [{ role: 'user', content: prompt }] });
-    const text = response.response || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-    return JSON.parse(jsonMatch[0]);
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                sentiment: { type: 'STRING', enum: ['POSITIVE', 'NEGATIVE', 'NEUTRAL'] },
+                score: { type: 'INTEGER' },
+                keyword: { type: 'STRING' }
+              },
+              required: ['sentiment', 'score', 'keyword']
+            }
+          }
+        })
+      }
+    );
+
+    if (!res.ok) {
+      console.error('Gemini analysis API error:', res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+    return JSON.parse(text);
   } catch (e) {
+    console.error('Gemini analysis failed:', e);
     return null;
   }
 }
@@ -168,8 +189,8 @@ async function translateTitle(request, env, ai) {
       });
     }
 
-    // Llama 3.2-3B-Instruct で翻訳
-    const translatedTitle = await runTranslation(ai, title);
+    // Gemini 2.0 Flash で翻訳
+    const translatedTitle = await runGeminiTranslation(env.GEMINI_API_KEY, title);
 
     return new Response(JSON.stringify({
       translated: true,
@@ -191,33 +212,41 @@ function containsJapanese(text) {
   return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(text);
 }
 
-async function runTranslation(ai, title) {
-  const prompt = `
-Translate the following news title to natural Japanese.
+async function runGeminiTranslation(apiKey, title) {
+  const prompt = `Translate the following news title to natural Japanese.
 Keep it concise and maintain the journalistic tone.
-Output ONLY the Japanese translation, no explanation.
+Output ONLY the Japanese translation, nothing else.
 
-Title: "${title}"
-Japanese:`;
+Title: "${title}"`;
 
   try {
-    const response = await ai.run('@cf/meta/llama-3.2-3b-instruct', {
-      messages: [{ role: 'user', content: prompt }]
-    });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 200
+          }
+        })
+      }
+    );
 
-    let translated = (response.response || '').trim();
-
-    // クォーテーションで囲まれている場合は削除
-    translated = translated.replace(/^["']|["']$/g, '').trim();
-
-    // 余計なプレフィックスが付いている場合の対策（"Here is the translation:" など）
-    const lowerTranslated = translated.toLowerCase();
-    if (lowerTranslated.startsWith('here is') || lowerTranslated.startsWith('translation:')) {
-      const parts = translated.split('\n');
-      translated = parts[parts.length - 1].replace(/^["']|["']$/g, '').trim();
+    if (!res.ok) {
+      console.error('Gemini translation API error:', res.status);
+      return null;
     }
 
-    // 翻訳結果に日本語が含まれていない場合はエラーとして扱い、フォールバックさせる
+    const data = await res.json();
+    let translated = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+    // クォーテーション除去
+    translated = translated.replace(/^["']|["']$/g, '').trim();
+
+    // 翻訳結果に日本語が含まれていない場合はフォールバック
     if (!containsJapanese(translated)) {
       console.warn('Translation output does not contain Japanese:', translated);
       return null;
@@ -225,7 +254,7 @@ Japanese:`;
 
     return translated;
   } catch (e) {
-    console.error('Translation failed:', e);
+    console.error('Gemini translation failed:', e);
     return null;
   }
 }
