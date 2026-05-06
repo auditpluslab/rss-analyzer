@@ -111,33 +111,28 @@ export async function onRequest(context) {
         if (result.status !== "fulfilled") return;
 
         const items = extractItems(result.value);
-        const isGoogleNews = feed.url.includes('news.google.com');
+        const isNikkei = NIKKEI_SOURCES.includes(feed.name);
 
         items.forEach(item => {
           if (!item.title || !item.link) return;
-          const cleanedTitle = cleanTitle(item.title);
+          if (existingKeys.has(item.link)) return;
 
-          if (isGoogleNews) {
+          const cleanedTitle = cleanTitle(item.title);
+          let dedupeKey = null;
+
+          if (isNikkei) {
             const nKey = normalizeTitleKey(cleanedTitle);
             if (nKey) {
               const fallback = feed.name === 'Nikkei Asia' ? 'asia.nikkei.com' : 'www.nikkei.com';
               const srcDomain = item.sourceUrl ? safeHostname(item.sourceUrl, fallback) : fallback;
-              const dedupeKey = `gn::${srcDomain}::${nKey}`;
+              dedupeKey = `gn::${srcDomain}::${nKey}`;
               if (existingKeys.has(dedupeKey)) return;
-              articlesToSave.push({ ...item, source: feed.name, cleanedTitle });
-              existingKeys.add(dedupeKey);
-              existingKeys.add(item.link);
-            } else {
-              if (existingKeys.has(item.link)) return;
-              articlesToSave.push({ ...item, source: feed.name, cleanedTitle });
-              existingKeys.add(item.link);
-            }
-          } else {
-            if (!existingKeys.has(item.link)) {
-              articlesToSave.push({ ...item, source: feed.name, cleanedTitle });
-              existingKeys.add(item.link);
             }
           }
+
+          articlesToSave.push({ ...item, source: feed.name, cleanedTitle });
+          existingKeys.add(item.link);
+          if (dedupeKey) existingKeys.add(dedupeKey);
         });
       });
 
