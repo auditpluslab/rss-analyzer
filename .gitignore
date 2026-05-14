@@ -165,3 +165,10 @@ dist
 .env*
 !.env.example
 .wrangler/
+.gstack/
+
+# Project-specific
+.DS_Store
+*.json.bak
+db_*.json
+docs/superpowers/
