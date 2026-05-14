@@ -14,7 +14,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "jsdom": "^27.4.0",
     "vitest": "^4.0.18",
-    "wrangler": "^4.54.0"
+    "wrangler": "^4.84.1"
   },
   "dependencies": {
     "fast-xml-parser": "^5.3.3"
