@@ -10,8 +10,8 @@
 		"test:coverage": "vitest --coverage"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.15.0",
-		"vitest": "~3.2.0",
+		"@cloudflare/vitest-pool-workers": "^0.16.8",
+		"vitest": "^4.1.0",
 		"wrangler": "^4.54.0"
 	},
 	"dependencies": {
