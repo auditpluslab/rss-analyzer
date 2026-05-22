@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "rss-db"
-database_id = "1724daea-5083-4912-8ac0-fec5a7364163"
+database_id = "91dcee9f-45ce-4884-a862-bda2ea61a1e6"
 
 [ai]
 binding = "AI"
