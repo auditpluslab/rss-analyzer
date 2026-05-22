@@ -25,4 +25,4 @@ jobs:
         run: npx wrangler pages deploy public --project-name=rss-reader-pwa
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 7e2ea20471a9b48c98ac828edf032a0e
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

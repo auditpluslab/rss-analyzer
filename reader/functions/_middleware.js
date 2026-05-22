@@ -6,6 +6,13 @@ export async function onRequest(context) {
     return new Response('ok');
   }
 
+  // API Key auth (for rss-scheduler and other machine clients)
+  const apiKey = context.request.headers.get('X-API-Key');
+  const validApiKey = context.env.API_AUTH_KEY;
+  if (validApiKey && apiKey === validApiKey) {
+    return context.next();
+  }
+
   const validUser = context.env.BASIC_USERNAME || 'admin';
   const validPass = context.env.BASIC_PASSWORD;
 

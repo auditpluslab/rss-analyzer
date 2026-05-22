@@ -1,6 +1,6 @@
 export default {
   async scheduled(event, env, ctx) {
-    const appUrl = "https://rss-reader-pwa-i12.pages.dev/api/fetch-rss?refresh==true&scope=full";
+    const appUrl = "https://rss-reader-pwa-i12.pages.dev/api/fetch-rss?refresh=true&scope=full";
 
     console.log("RSS更新ロボット、出動します...");
 
