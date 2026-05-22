@@ -1,0 +1,12 @@
+name = "rss-scheduler"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# 4時間ごとに実行（0時, 4時, 8時...）
+[triggers]
+crons = ["0 */4 * * *"]
+
+# ▼ rss-analyzer を "ANALYZER" という名前で使えるようにする設定
+[[services]]
+binding = "ANALYZER"
+service = "rss-analyzer"
