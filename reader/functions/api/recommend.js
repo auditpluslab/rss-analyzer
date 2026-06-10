@@ -59,11 +59,63 @@ export async function onRequest(context) {
       }
     }
 
-    // 3. 全「未読記事」かつ「厳選ドメイン or GN source名」の記事のみを取得
+    // 3. 行動シグナル: 直近5日間のソース別・タグ別インタラクション率を計算
+    const signalCutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { results: sourceStats } = await db.prepare(`
+      SELECT source,
+        COUNT(*) as total,
+        SUM(CASE WHEN is_read = 1 THEN 1 ELSE 0 END) as reads,
+        SUM(CASE WHEN is_saved = 1 THEN 1 ELSE 0 END) as saves
+      FROM articles
+      WHERE published_at > ?
+      GROUP BY source
+    `).bind(signalCutoff).all();
+
+    const sourceBoost = {};
+    sourceStats.forEach(s => {
+      if (s.total < 3) return;
+      const interactionRate = (s.reads + s.saves * 3) / s.total;
+      if (interactionRate >= 0.6) sourceBoost[s.source] = 0.15;
+      else if (interactionRate <= 0.2) sourceBoost[s.source] = -0.15;
+    });
+
+    const { results: readTagRows } = await db.prepare(`
+      SELECT tags FROM articles
+      WHERE is_read = 1 AND published_at > ? AND tags != ''
+    `).bind(signalCutoff).all();
+
+    const { results: unreadTagRows } = await db.prepare(`
+      SELECT tags FROM articles
+      WHERE is_read = 0 AND published_at > ? AND tags != ''
+    `).bind(signalCutoff).all();
+
+    const tagReads = {};
+    readTagRows.forEach(r => r.tags.split(',').forEach(t => {
+      const tag = t.trim();
+      if (tag) tagReads[tag] = (tagReads[tag] || 0) + 1;
+    }));
+    const tagUnread = {};
+    unreadTagRows.forEach(r => r.tags.split(',').forEach(t => {
+      const tag = t.trim();
+      if (tag) tagUnread[tag] = (tagUnread[tag] || 0) + 1;
+    }));
+
+    const tagBoost = {};
+    Object.keys({ ...tagReads, ...tagUnread }).forEach(tag => {
+      const reads = tagReads[tag] || 0;
+      const total = reads + (tagUnread[tag] || 0);
+      if (total < 3) return;
+      const rate = reads / total;
+      if (rate >= 0.6) tagBoost[tag] = 0.1;
+      else if (rate <= 0.2) tagBoost[tag] = -0.1;
+    });
+
+    // 4. 全「未読記事」かつ「厳選ドメイン or GN source名」の記事のみを取得
     const domainConditions = allowedDomains.map(() => "url LIKE ?").join(" OR ");
     const sourceConditions = gnSources.map(() => "source = ?").join(" OR ");
     const { results: unreadArticles } = await db.prepare(`
-      SELECT url, title, source, published_at, description, category, embedding, is_saved, score
+      SELECT url, title, source, published_at, description, category, embedding, is_saved, score, tags
       FROM articles
       WHERE is_read = 0
       AND embedding IS NOT NULL
@@ -71,7 +123,7 @@ export async function onRequest(context) {
       ORDER BY published_at DESC LIMIT 300
     `).bind(...allowedDomains.map(d => `%${d}%`), ...gnSources).all();
 
-    // 4. 3シグナルスコア（行動40% + キーワード40% + AI 20%）を計算してソート
+    // 5. 4シグナルスコア（行動ベクトル35% + キーワード35% + AI 15% + 行動シグナル15%）を計算
     const hasBehavioralData = userVector !== null;
 
     const scoredArticles = unreadArticles.map(article => {
@@ -81,15 +133,21 @@ export async function onRequest(context) {
       const articleScore = article.score || 0;
       const kwScore = keywordMatchScore(article.title, PROFILE);
 
+      // 行動シグナル: ソース別ブースト + タグ別ブースト
+      const behavioralAdj = (sourceBoost[article.source] || 0)
+        + (article.tags ? article.tags.split(',').reduce((sum, t) => sum + (tagBoost[t.trim()] || 0), 0) : 0);
+      const clampedAdj = Math.max(-0.3, Math.min(0.3, behavioralAdj));
+
       let finalScore;
+      let similarity = 0;
       if (hasBehavioralData) {
-        const similarity = cosineSimilarity(userVector, vec);
-        finalScore = (similarity * 0.4) + (kwScore * 0.4) + ((articleScore / 100) * 0.2);
+        similarity = cosineSimilarity(userVector, vec);
+        finalScore = (similarity * 0.35) + (kwScore * 0.35) + ((articleScore / 100) * 0.15) + clampedAdj;
       } else {
-        finalScore = (kwScore * 0.8) + ((articleScore / 100) * 0.2);
+        finalScore = (kwScore * 0.7) + ((articleScore / 100) * 0.15) + clampedAdj;
       }
 
-      return { ...article, finalScore, similarity: hasBehavioralData ? cosineSimilarity(userVector, vec) : 0 };
+      return { ...article, finalScore, similarity };
     });
 
     scoredArticles.sort((a, b) => b.finalScore - a.finalScore);

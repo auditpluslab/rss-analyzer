@@ -2,7 +2,7 @@ export async function onRequest(context) {
   try {
     // 1. データベースから最近クリックした記事のID（URL）を5件取得
     const { results } = await context.env.DB.prepare(
-      "SELECT article_id FROM clicks ORDER BY clicked_at DESC LIMIT 5"
+      "SELECT article_url FROM clicks ORDER BY clicked_at DESC LIMIT 5"
     ).all();
 
     // データがない場合
@@ -13,7 +13,7 @@ export async function onRequest(context) {
     }
 
     // 2. 記事URLからリストを作成
-    const clickedUrls = results.map(r => r.article_id).join("\n");
+    const clickedUrls = results.map(r => r.article_url).join("\n");
 
     // 3. Gemini API に送るプロンプト（命令文）を作成
     const prompt = `

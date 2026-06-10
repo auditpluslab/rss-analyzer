@@ -63,14 +63,6 @@ export async function onRequest(context) {
   // 2. 許可されたソース名リスト（rssFeeds から自動生成）
   const allowedSources = [...new Set(rssFeeds.map(f => f.name))];
 
-  // 3. タイトルベース重複排除用: 日経系ソース名
-  const NIKKEI_SOURCES = [
-    '日経Biz', '日経国際', '日経Tech', '日経市場', '日経地域',
-    '日経速報', '日経スポ', '日経経済', '日経ビジネス', '日経X',
-    '日経政治', '日経文化', '日経生活', '日経社説',
-    '日経科学', '日経医療', '日経教育', 'Nikkei Asia'
-  ];
-
   const db = context.env.DB;
   const ai = context.env.AI;
   const analyzer = context.env.ANALYZER;
@@ -81,19 +73,16 @@ export async function onRequest(context) {
       const existingUrlsResult = await db.prepare("SELECT url FROM articles").all();
       const existingUrls = new Set(existingUrlsResult.results.map(r => r.url));
 
-      // タイトルベース重複排除: 日経系過去14日分のタイトルキーを構築
+      // タイトルベース重複排除: 全ソース過去14日分のタイトルキーを構築
       const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      const nikkeiPlaceholders = NIKKEI_SOURCES.map(() => '?').join(',');
       const existingTitlesResult = await db.prepare(
-        `SELECT title, source FROM articles WHERE published_at > ? AND source IN (${nikkeiPlaceholders})`
-      ).bind(cutoff, ...NIKKEI_SOURCES).all();
+        "SELECT title FROM articles WHERE published_at > ?"
+      ).bind(cutoff).all();
 
       const existingKeys = new Set(existingUrls);
       existingTitlesResult.results.forEach(r => {
         const key = normalizeTitleKey(r.title);
-        if (!key) return;
-        const domain = r.source === 'Nikkei Asia' ? 'asia.nikkei.com' : 'www.nikkei.com';
-        existingKeys.add(`gn::${domain}::${key}`);
+        if (key) existingKeys.add(`t::${key}`);
       });
 
       // 全フィード並列取得（Google News側は10秒タイムアウト）
@@ -111,7 +100,6 @@ export async function onRequest(context) {
         if (result.status !== "fulfilled") return;
 
         const items = extractItems(result.value);
-        const isNikkei = NIKKEI_SOURCES.includes(feed.name);
 
         items.forEach(item => {
           if (!item.title || !item.link) return;
@@ -120,14 +108,11 @@ export async function onRequest(context) {
           const cleanedTitle = cleanTitle(item.title);
           let dedupeKey = null;
 
-          if (isNikkei) {
-            const nKey = normalizeTitleKey(cleanedTitle);
-            if (nKey) {
-              const fallback = feed.name === 'Nikkei Asia' ? 'asia.nikkei.com' : 'www.nikkei.com';
-              const srcDomain = item.sourceUrl ? safeHostname(item.sourceUrl, fallback) : fallback;
-              dedupeKey = `gn::${srcDomain}::${nKey}`;
-              if (existingKeys.has(dedupeKey)) return;
-            }
+          // 全ソース共通のタイトルベース重複排除
+          const nKey = normalizeTitleKey(cleanedTitle);
+          if (nKey) {
+            dedupeKey = `t::${nKey}`;
+            if (existingKeys.has(dedupeKey)) return;
           }
 
           articlesToSave.push({ ...item, source: feed.name, cleanedTitle });
@@ -211,6 +196,16 @@ export async function onRequest(context) {
       const gcPlaceholders = allowedSources.map(() => "?").join(",");
       await db.prepare(`DELETE FROM articles WHERE source NOT IN (${gcPlaceholders})`)
         .bind(...allowedSources).run();
+
+      // 14日以上前の未保存記事を自動削除
+      const pruneCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      await db.prepare("DELETE FROM articles WHERE published_at < ? AND is_saved = 0")
+        .bind(pruneCutoff).run();
+
+      // 30日以上前の記事は保存済みも含めて削除
+      const deepPruneCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      await db.prepare("DELETE FROM articles WHERE published_at < ?")
+        .bind(deepPruneCutoff).run();
     }
 
     // 表示用データの抽出（ソース名ベースでフィルタリング）
@@ -329,8 +324,4 @@ function normalizeTitleKey(title) {
     .replace(/\s+/g, "")
     .toLowerCase();
   return key.length >= 3 ? key : "";
-}
-
-function safeHostname(urlStr, fallback) {
-  try { return new URL(urlStr).hostname; } catch { return fallback; }
 }
